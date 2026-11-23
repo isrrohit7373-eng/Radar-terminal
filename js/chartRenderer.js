@@ -315,6 +315,48 @@ window.ChartRenderer = (function () {
       ctx.restore();
     }
 
+
+    // 7B. DIVERGENCE OVERLAYS ON MAIN CHART (RSI DIV & VOLUME-PRICE DIV)
+    if (opts.divergences) {
+      const drawDivSet = (list, isVol) => {
+        list.forEach(d => {
+          if (d.idx2 < startIdx) return;
+          const x1 = Math.max(padL + 4, xOfGlobal(d.idx1));
+          const x2 = Math.min(W - padR - 6, xOfGlobal(d.idx2));
+          const y1 = yOf(d.price1);
+          const y2 = yOf(d.price2);
+          const isBull = d.type === 'BULL';
+          const col = isVol
+            ? (isBull ? '#22d3ee' : '#f59e0b')
+            : (isBull ? '#00e676' : '#ff4757');
+
+          ctx.save();
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 2;
+          ctx.setLineDash(isVol ? [3, 3] : [6, 3]);
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.font = 'bold 9px monospace';
+          const tw = ctx.measureText(d.label).width + 8;
+          const badgeY = isBull ? Math.min(H - padB - 14, y2 + 12) : Math.max(padT + 12, y2 - 16);
+          ctx.fillStyle = '#080e18';
+          ctx.fillRect(x2 - tw / 2, badgeY - 10, tw, 13);
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x2 - tw / 2, badgeY - 10, tw, 13);
+          ctx.fillStyle = col;
+          ctx.fillText(d.label, x2 - tw / 2 + 4, badgeY);
+          ctx.restore();
+        });
+      };
+      if (layers.rsiDiv && opts.divergences.rsiDivs) drawDivSet(opts.divergences.rsiDivs, false);
+      if (layers.volDiv && opts.divergences.volDivs) drawDivSet(opts.divergences.volDivs, true);
+    }
+
     // 8. Live Current Price Line & Tag on Right Axis
     const lastPrice = vis[vis.length - 1].close;
     const yNow = yOf(lastPrice);
@@ -464,8 +506,213 @@ window.ChartRenderer = (function () {
     ctx.fillText(`SL: ${fmtPrice(t.sl)}`, zoneX + 34, isBear ? Math.max(18, last.y - 14) : Math.min(H - 12, last.y + 18));
   }
 
+
+  function drawRsiPane(canvas, opts) {
+    const { candles, rsiData, divergences, showDiv } = opts;
+    if (!canvas || !candles || !candles.length || !rsiData) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const W = Math.max(300, rect.width);
+    const H = Math.max(110, rect.height || 135);
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#060a11';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 12, padR = 96, padT = 12, padB = 14;
+    const forecastSlots = 18;
+    const visibleCount = Math.min(72, candles.length);
+    const startIdx = candles.length - visibleCount;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const stepX = plotW / (visibleCount + forecastSlots);
+
+    const xOfVis = i => padL + (i + 0.5) * stepX;
+    const xOfGlobal = gIdx => padL + (gIdx - startIdx + 0.5) * stepX;
+    const yOf = val => padT + ((100 - Math.max(0, Math.min(100, val))) / 100) * plotH;
+
+    ctx.fillStyle = 'rgba(59, 130, 246, 0.06)';
+    ctx.fillRect(padL, yOf(70), plotW, yOf(30) - yOf(70));
+
+    ctx.font = '10px monospace';
+    [70, 50, 30].forEach(lvl => {
+      const y = yOf(lvl);
+      ctx.strokeStyle = lvl === 50 ? 'rgba(127, 148, 176, 0.25)' : 'rgba(127, 148, 176, 0.45)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(W - padR, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = lvl === 70 ? '#ff6b81' : lvl === 30 ? '#2ed573' : '#7f94b0';
+      ctx.fillText(String(lvl), W - padR + 8, y + 3);
+    });
+
+    const rsiVis = rsiData.rsi.slice(startIdx);
+    const maVis = rsiData.rsiMA.slice(startIdx);
+
+    ctx.save();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    let started = false;
+    maVis.forEach((v, i) => {
+      if (v === null) return;
+      const x = xOfVis(i), y = yOf(v);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    started = false;
+    rsiVis.forEach((v, i) => {
+      if (v === null) return;
+      const x = xOfVis(i), y = yOf(v);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.restore();
+
+    if (showDiv && divergences && divergences.rsiDivs) {
+      divergences.rsiDivs.forEach(d => {
+        if (d.idx2 < startIdx || d.ind1 === null || d.ind2 === null) return;
+        const x1 = Math.max(padL + 4, xOfGlobal(d.idx1));
+        const x2 = Math.min(W - padR - 6, xOfGlobal(d.idx2));
+        const y1 = yOf(d.ind1);
+        const y2 = yOf(d.ind2);
+        const col = d.type === 'BULL' ? '#00e676' : '#ff4757';
+        ctx.save();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(x2, y2, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    if (rsiData.latestRsi !== null) {
+      const yNow = yOf(rsiData.latestRsi);
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(W - padR + 2, yNow - 8, 46, 16);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText(rsiData.latestRsi.toFixed(1), W - padR + 7, yNow + 3);
+    }
+  }
+
+  function drawMacdPane(canvas, opts) {
+    const { candles, macdData } = opts;
+    if (!canvas || !candles || !candles.length || !macdData) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const W = Math.max(300, rect.width);
+    const H = Math.max(110, rect.height || 135);
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#060a11';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 12, padR = 96, padT = 12, padB = 14;
+    const forecastSlots = 18;
+    const visibleCount = Math.min(72, candles.length);
+    const startIdx = candles.length - visibleCount;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const stepX = plotW / (visibleCount + forecastSlots);
+
+    const mVis = macdData.macd.slice(startIdx);
+    const sVis = macdData.signal.slice(startIdx);
+    const hVis = macdData.hist.slice(startIdx);
+
+    let maxAbs = 1;
+    [...mVis, ...sVis, ...hVis].forEach(v => {
+      if (v !== null && Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
+    });
+    maxAbs *= 1.15;
+
+    const xOfVis = i => padL + (i + 0.5) * stepX;
+    const yOf = val => padT + ((maxAbs - val) / (2 * maxAbs)) * plotH;
+    const yZero = yOf(0);
+
+    ctx.strokeStyle = 'rgba(127, 148, 176, 0.4)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(padL, yZero);
+    ctx.lineTo(W - padR, yZero);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#7f94b0';
+    ctx.font = '10px monospace';
+    ctx.fillText('0.0', W - padR + 8, yZero + 3);
+
+    const barW = Math.max(2, Math.min(8, stepX * 0.6));
+    hVis.forEach((v, i) => {
+      if (v === null) return;
+      const x = xOfVis(i);
+      const y = yOf(v);
+      ctx.fillStyle = v >= 0 ? 'rgba(0, 230, 118, 0.5)' : 'rgba(255, 71, 87, 0.5)';
+      ctx.fillRect(x - barW / 2, Math.min(y, yZero), barW, Math.max(1, Math.abs(y - yZero)));
+    });
+
+    ctx.save();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    let started = false;
+    mVis.forEach((v, i) => {
+      if (v === null) return;
+      const x = xOfVis(i), y = yOf(v);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    started = false;
+    sVis.forEach((v, i) => {
+      if (v === null) return;
+      const x = xOfVis(i), y = yOf(v);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
   return {
     drawMainChart,
+    drawRsiPane,
+    drawMacdPane,
     drawMiniPattern,
     drawModalPattern,
     fmtPrice

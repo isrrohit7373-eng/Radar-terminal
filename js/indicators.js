@@ -1,7 +1,8 @@
 /**
  * js/indicators.js
  * Computes VWAP, VPVR (Volume Profile), Support/Resistance Zones,
- * and Swing Pivot Extraction for the 123 Geo Pattern Engine.
+ * Swing Pivot Extraction, RSI + RSI Moving Average, MACD (12,26,9),
+ * and RSI / Volume-Price Divergence Detection.
  */
 window.Indicators = (function () {
 
@@ -86,9 +87,6 @@ window.Indicators = (function () {
     return levels;
   }
 
-  /**
-   * Extract normalized swing pivots from recent candles for 123 Geo pattern matching.
-   */
   function extractSwings(candles, maxSwings = 9) {
     if (!candles || candles.length < 12) return [];
     const windowCandles = candles.slice(-65);
@@ -116,7 +114,6 @@ window.Indicators = (function () {
       }
     }
 
-    // Always append current live candle close as latest structural anchor
     const lastIdx = candles.length - 1;
     const lastClose = candles[lastIdx].close;
     if (!pivots.length || pivots[pivots.length - 1].index < lastIdx) {
@@ -131,10 +128,185 @@ window.Indicators = (function () {
     return pivots.slice(-maxSwings);
   }
 
+  function computeEMA(values, period) {
+    const out = new Array(values.length).fill(null);
+    if (!values.length) return out;
+    const k = 2 / (period + 1);
+    let ema = null;
+    for (let i = 0; i < values.length; i++) {
+      const v = values[i];
+      if (v === null || v === undefined || Number.isNaN(v)) continue;
+      if (ema === null) {
+        ema = v;
+      } else {
+        ema = v * k + ema * (1 - k);
+      }
+      out[i] = +ema.toFixed(4);
+    }
+    return out;
+  }
+
+  function computeSMA(values, period) {
+    const out = new Array(values.length).fill(null);
+    for (let i = 0; i < values.length; i++) {
+      if (i < period - 1) continue;
+      let sum = 0;
+      let cnt = 0;
+      for (let j = i - period + 1; j <= i; j++) {
+        if (values[j] !== null && values[j] !== undefined && !Number.isNaN(values[j])) {
+          sum += values[j];
+          cnt++;
+        }
+      }
+      if (cnt === period) out[i] = +(sum / period).toFixed(2);
+    }
+    return out;
+  }
+
+  function computeRSI(candles, period = 14, maPeriod = 14) {
+    const n = candles ? candles.length : 0;
+    const rsi = new Array(n).fill(null);
+    if (n <= period) return { rsi, rsiMA: new Array(n).fill(null), latestRsi: null, latestRsiMA: null };
+
+    let gainSum = 0;
+    let lossSum = 0;
+    for (let i = 1; i <= period; i++) {
+      const diff = candles[i].close - candles[i - 1].close;
+      if (diff >= 0) gainSum += diff;
+      else lossSum += Math.abs(diff);
+    }
+
+    let avgGain = gainSum / period;
+    let avgLoss = lossSum / period;
+    rsi[period] = avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2);
+
+    for (let i = period + 1; i < n; i++) {
+      const diff = candles[i].close - candles[i - 1].close;
+      const gain = diff > 0 ? diff : 0;
+      const loss = diff < 0 ? Math.abs(diff) : 0;
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+      rsi[i] = avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2);
+    }
+
+    const rsiMA = computeSMA(rsi, maPeriod);
+    return {
+      rsi,
+      rsiMA,
+      latestRsi: rsi[n - 1],
+      latestRsiMA: rsiMA[n - 1]
+    };
+  }
+
+  function computeMACD(candles, fast = 12, slow = 26, signalPeriod = 9) {
+    const n = candles ? candles.length : 0;
+    if (!n) return { macd: [], signal: [], hist: [], latestMacd: 0, latestSignal: 0, latestHist: 0 };
+    const closes = candles.map(c => c.close);
+    const emaFast = computeEMA(closes, fast);
+    const emaSlow = computeEMA(closes, slow);
+    const macd = closes.map((_, i) =>
+      emaFast[i] !== null && emaSlow[i] !== null ? +(emaFast[i] - emaSlow[i]).toFixed(2) : null
+    );
+    const signal = computeEMA(macd, signalPeriod).map(v => (v !== null ? +v.toFixed(2) : null));
+    const hist = macd.map((m, i) =>
+      m !== null && signal[i] !== null ? +(m - signal[i]).toFixed(2) : null
+    );
+    return {
+      macd,
+      signal,
+      hist,
+      latestMacd: macd[n - 1] || 0,
+      latestSignal: signal[n - 1] || 0,
+      latestHist: hist[n - 1] || 0
+    };
+  }
+
+  function detectDivergences(candles, rsiSeries) {
+    const rsiDivs = [];
+    const volDivs = [];
+    if (!candles || candles.length < 20) return { rsiDivs, volDivs };
+
+    const swingHighs = [];
+    const swingLows = [];
+    const start = Math.max(2, candles.length - 70);
+
+    for (let i = start; i < candles.length - 2; i++) {
+      const c = candles[i];
+      if (c.high >= candles[i - 1].high && c.high >= candles[i + 1].high &&
+          c.high >= candles[i - 2].high && c.high >= candles[i + 2].high) {
+        swingHighs.push({ idx: i, price: c.high, vol: c.volume, rsi: rsiSeries[i] });
+      }
+      if (c.low <= candles[i - 1].low && c.low <= candles[i + 1].low &&
+          c.low <= candles[i - 2].low && c.low <= candles[i + 2].low) {
+        swingLows.push({ idx: i, price: c.low, vol: c.volume, rsi: rsiSeries[i] });
+      }
+    }
+
+    for (let k = 1; k < swingHighs.length; k++) {
+      const p1 = swingHighs[k - 1];
+      const p2 = swingHighs[k];
+      if (p2.idx - p1.idx < 4) continue;
+
+      if (p2.price > p1.price && p1.rsi !== null && p2.rsi !== null && p2.rsi < p1.rsi - 2) {
+        rsiDivs.push({
+          type: 'BEAR', source: 'RSI',
+          idx1: p1.idx, idx2: p2.idx,
+          price1: p1.price, price2: p2.price,
+          ind1: p1.rsi, ind2: p2.rsi,
+          label: 'BEAR RSI DIV'
+        });
+      }
+
+      if (p2.price > p1.price && p2.vol < p1.vol * 0.85) {
+        volDivs.push({
+          type: 'BEAR', source: 'VOL',
+          idx1: p1.idx, idx2: p2.idx,
+          price1: p1.price, price2: p2.price,
+          ind1: p1.vol, ind2: p2.vol,
+          label: 'BEAR VOL DIV'
+        });
+      }
+    }
+
+    for (let k = 1; k < swingLows.length; k++) {
+      const p1 = swingLows[k - 1];
+      const p2 = swingLows[k];
+      if (p2.idx - p1.idx < 4) continue;
+
+      if (p2.price < p1.price && p1.rsi !== null && p2.rsi !== null && p2.rsi > p1.rsi + 2) {
+        rsiDivs.push({
+          type: 'BULL', source: 'RSI',
+          idx1: p1.idx, idx2: p2.idx,
+          price1: p1.price, price2: p2.price,
+          ind1: p1.rsi, ind2: p2.rsi,
+          label: 'BULL RSI DIV'
+        });
+      }
+
+      if (p2.price < p1.price && p2.vol < p1.vol * 0.85) {
+        volDivs.push({
+          type: 'BULL', source: 'VOL',
+          idx1: p1.idx, idx2: p2.idx,
+          price1: p1.price, price2: p2.price,
+          ind1: p1.vol, ind2: p2.vol,
+          label: 'BULL VOL DIV'
+        });
+      }
+    }
+
+    return {
+      rsiDivs: rsiDivs.slice(-3),
+      volDivs: volDivs.slice(-3)
+    };
+  }
+
   return {
     computeVWAP,
     computeVPVR,
     computeSRLevels,
-    extractSwings
+    extractSwings,
+    computeRSI,
+    computeMACD,
+    detectDivergences
   };
 })();

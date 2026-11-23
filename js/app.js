@@ -16,7 +16,7 @@
     visibleCards: 24,
     pinnedUid: null,
     sonarOn: true,
-    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, geo: true, fib: true },
+    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true },
     evaluations: { '1m': [], '5m': [], '15m': [], '4h': [] },
     inspectedObj: null
   };
@@ -135,9 +135,59 @@
     obiBadge.textContent = `OBI PRESSURE: ${obi >= 0 ? '+' : ''}${obi}%`;
     obiBadge.style.color = obi >= 0 ? '#00e676' : '#ff4757';
 
+    const rsiData = window.Indicators.computeRSI(candles, 14, 14);
+    const macdData = window.Indicators.computeMACD(candles, 12, 26, 9);
+    const divergences = window.Indicators.detectDivergences(candles, rsiData.rsi);
+
     window.ChartRenderer.drawMainChart($('mainChartCanvas'), {
-      candles, vwap, vpvr, srLevels, activeMatch, layers: AppState.layers
+      candles, vwap, vpvr, srLevels, activeMatch, layers: AppState.layers, divergences
     });
+
+    const rsiWrap = $('rsiPaneWrap');
+    if (rsiWrap) {
+      rsiWrap.style.display = AppState.layers.rsi ? 'block' : 'none';
+      if (AppState.layers.rsi) {
+        const rVal = rsiData.latestRsi !== null ? rsiData.latestRsi.toFixed(1) : '--';
+        const mVal = rsiData.latestRsiMA !== null ? rsiData.latestRsiMA.toFixed(1) : '--';
+        $('rsiReadout').textContent = `RSI(14): ${rVal} | RSI-MA(14): ${mVal}`;
+        window.ChartRenderer.drawRsiPane($('rsiCanvas'), {
+          candles, rsiData, divergences, showDiv: AppState.layers.rsiDiv
+        });
+      }
+    }
+
+    const macdWrap = $('macdPaneWrap');
+    if (macdWrap) {
+      macdWrap.style.display = AppState.layers.macd ? 'block' : 'none';
+      if (AppState.layers.macd) {
+        $('macdReadout').textContent = `MACD: ${macdData.latestMacd.toFixed(2)} | SIG: ${macdData.latestSignal.toFixed(2)} | HIST: ${macdData.latestHist >= 0 ? '+' : ''}${macdData.latestHist.toFixed(2)}`;
+        window.ChartRenderer.drawMacdPane($('macdCanvas'), { candles, macdData });
+      }
+    }
+
+    const strip = $('divAlertStrip');
+    if (strip) {
+      const pills = ['<span class="badge-tag">MOMENTUM &amp; DIVERGENCE</span>'];
+      if (rsiData.latestRsi !== null && rsiData.latestRsiMA !== null) {
+        const rsiBull = rsiData.latestRsi >= rsiData.latestRsiMA;
+        pills.push(`<span class="div-pill ${rsiBull ? 'bull' : 'bear'}">RSI ${rsiData.latestRsi.toFixed(1)} ${rsiBull ? '▲ >' : '▼ <'} MA ${rsiData.latestRsiMA.toFixed(1)}</span>`);
+      }
+      const macdBull = macdData.latestHist >= 0;
+      pills.push(`<span class="div-pill ${macdBull ? 'bull' : 'bear'}">MACD HIST ${macdData.latestHist >= 0 ? '+' : ''}${macdData.latestHist.toFixed(2)}</span>`);
+
+      const latestRsiDiv = divergences.rsiDivs[divergences.rsiDivs.length - 1];
+      const latestVolDiv = divergences.volDivs[divergences.volDivs.length - 1];
+      if (latestRsiDiv) {
+        pills.push(`<span class="div-pill ${latestRsiDiv.type === 'BULL' ? 'bull' : 'bear'}">⚡ ${latestRsiDiv.label}</span>`);
+      }
+      if (latestVolDiv) {
+        pills.push(`<span class="div-pill ${latestVolDiv.type === 'BULL' ? 'bull' : 'bear'}">⚡ ${latestVolDiv.label}</span>`);
+      }
+      if (!latestRsiDiv && !latestVolDiv) {
+        pills.push('<span class="div-pill info">No Active Divergence on Current Window</span>');
+      }
+      strip.innerHTML = pills.join('');
+    }
 
     // Update Active Pattern Footer Bar
     if (activeMatch) {
