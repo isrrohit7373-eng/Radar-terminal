@@ -94,6 +94,15 @@
           <button class="toggle-chip active" data-layer="sr">S/R LEVELS</button>
           <button class="toggle-chip active" data-layer="geo">GEO PATTERN</button>
           <button class="toggle-chip active" data-layer="fib">FIB TARGET ZONE</button>
+          <button class="toggle-chip active" data-layer="rsiDiv">RSI DIV</button>
+          <button class="toggle-chip active" data-layer="volDiv">VOL-PRICE DIV</button>
+          <button class="toggle-chip active" data-layer="rsi">RSI + MA</button>
+          <button class="toggle-chip active" data-layer="macd">MACD</button>
+        </div>
+
+        <div class="div-alert-strip" id="divAlertStrip">
+          <span class="badge-tag">MOMENTUM &amp; DIVERGENCE</span>
+          <span class="div-pill info" id="divSummaryText">Scanning RSI, MACD &amp; Volume-Price Divergence...</span>
         </div>
 
         <div class="ohlc-bar" id="ohlcBar">
@@ -104,6 +113,24 @@
         <div class="canvas-wrap">
           <canvas id="mainChartCanvas"></canvas>
           <div class="obi-floating-badge" id="obiFloatingBadge">OBI PRESSURE: 0.0%</div>
+        </div>
+
+        <!-- SUB-PANE 1: RSI (14) + RSI MA (14) + DIVERGENCE -->
+        <div class="sub-pane-wrap" id="rsiPaneWrap">
+          <div class="sub-pane-header">
+            <span>RSI (14) · RSI MA (14) · DIVERGENCE OVERLAY</span>
+            <span id="rsiReadout">RSI: -- | RSI-MA: --</span>
+          </div>
+          <canvas id="rsiCanvas"></canvas>
+        </div>
+
+        <!-- SUB-PANE 2: MACD (12, 26, 9) -->
+        <div class="sub-pane-wrap" id="macdPaneWrap">
+          <div class="sub-pane-header">
+            <span>MACD (12, 26, 9) · HISTOGRAM &amp; SIGNAL</span>
+            <span id="macdReadout">MACD: -- | SIGNAL: -- | HIST: --</span>
+          </div>
+          <canvas id="macdCanvas"></canvas>
         </div>
 
         <!-- ACTIVE PATTERN & FIB TARGET FOOTER BAR -->
@@ -243,6 +270,15 @@
               <li><span class="txt-gray">○ GRAY (AWAITING):</span> Future completion leg (e.g. Point D / Breakout) not yet formed.</li>
               <li><span class="txt-red">● RED (FAIL):</span> Structural invalidation → Overall Match forced to <strong>0% REJECTED</strong>.</li>
               <li><strong>Formula:</strong> <code>Overall % = Math.round((GreenDots / TotalDots) * 100)</code></li>
+            </ul>
+
+            <h3 style="margin-top:16px;">4. RSI + MA, MACD &amp; Divergence Rules</h3>
+            <ul class="rule-list">
+              <li><strong>RSI (14) &amp; RSI MA (14):</strong> Wilder's Relative Strength Index smoothed with a 14-period SMA. RSI &gt; RSI MA = bullish momentum; RSI &lt; RSI MA = bearish momentum.</li>
+              <li><strong>MACD (12, 26, 9):</strong> <code>MACD = EMA(12) - EMA(26)</code>, <code>Signal = EMA(9 of MACD)</code>, <code>Histogram = MACD - Signal</code>.</li>
+              <li><span class="txt-green">● Bullish RSI Divergence:</span> Price makes a <strong>Lower Low</strong> while RSI makes a <strong>Higher Low</strong> (plotted on Main Chart &amp; RSI Pane).</li>
+              <li><span class="txt-red">● Bearish RSI Divergence:</span> Price makes a <strong>Higher High</strong> while RSI makes a <strong>Lower High</strong>.</li>
+              <li><span class="txt-cyan">● Volume-Price Divergence:</span> Price makes a new swing high/low on <strong>declining volume</strong>, signaling trend exhaustion and potential reversal.</li>
             </ul>
           </div>
         </div>
