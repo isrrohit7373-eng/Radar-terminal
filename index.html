@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BTC/USDT // RADAR TERMINAL v4 — 123 Geo &amp; Fib Target Engine</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- TOP HEADER -->
+    <header class="top-header">
+      <div class="brand-group">
+        <span class="pulse-dot" id="connDot"></span>
+        <span class="brand-title">BTC/USDT <span class="dim">//</span> RADAR TERMINAL</span>
+        <span class="status-pill live" id="connStatus">LIVE (REST BINANCE)</span>
+      </div>
+
+      <div class="ticker-group">
+        <span class="live-price" id="livePrice">$61,500.00</span>
+        <span class="price-change pos" id="priceChange">+$0.00 (+0.00%)</span>
+        <span class="metric-chip">VWAP: <strong id="headerVwap">--</strong></span>
+        <span class="metric-chip">OBI: <strong id="headerObi">--</strong></span>
+      </div>
+    </header>
+
+    <!-- MAIN TABS -->
+    <nav class="main-tabs">
+      <button class="tab-btn active" data-tab="terminal">मुख्य टर्मिनल (MAIN TERMINAL)</button>
+      <button class="tab-btn" data-tab="library">123 पैटर्न लाइब्रेरी (PATTERN LIBRARY)</button>
+      <button class="tab-btn" data-tab="formula">फॉर्मूला लैब (FORMULA LAB)</button>
+    </nav>
+
+    <!-- CONTROL STRIP -->
+    <section class="control-strip">
+      <div class="ctrl-left">
+        <div class="tf-group" id="mainTfButtons">
+          <button class="tf-btn active" data-tf="1m">1m</button>
+          <button class="tf-btn" data-tf="5m">5m</button>
+          <button class="tf-btn" data-tf="15m">15m</button>
+          <button class="tf-btn" data-tf="4h">4h</button>
+        </div>
+        <button class="mode-btn active" id="btnLiveMode">LIVE</button>
+        <button class="mode-btn" id="btnSimMode">SIMULATION</button>
+        <button class="mode-btn" id="btnRetry">↻ RETRY</button>
+        <button class="mode-btn active" id="btnSonar">SONAR ON</button>
+      </div>
+      <div class="ctrl-right" id="tfBiasStrip">
+        <span class="bias-pill neutral" data-tf-bias="1m">1m: NEUTRAL</span>
+        <span class="bias-pill neutral" data-tf-bias="5m">5m: NEUTRAL</span>
+        <span class="bias-pill neutral" data-tf-bias="15m">15m: NEUTRAL</span>
+        <span class="bias-pill neutral" data-tf-bias="4h">4h: NEUTRAL</span>
+      </div>
+    </section>
+
+    <!-- TAB 1: MAIN TERMINAL -->
+    <main id="tab-terminal" class="tab-panel active">
+      <!-- 123 GEO SCANNER SUMMARY -->
+      <section class="card scanner-card">
+        <div class="scanner-header">
+          <div class="scanner-title">
+            <span class="badge-tag">123 GEO V4 SCANNER</span>
+            <span>LIVE BULLISH &amp; BEARISH PATTERN MATCHES (1m · 5m · 15m · 4h)</span>
+          </div>
+          <div class="slider-inline">
+            <label for="dashMinMatch">MIN MATCH:</label>
+            <input type="range" id="dashMinMatch" min="0" max="100" step="5" value="25" />
+            <span class="pct-pill" id="dashMinMatchVal">25%+</span>
+          </div>
+        </div>
+        <div class="tf-summary-grid" id="tfSummaryGrid">
+          <!-- Populated dynamically by app.js -->
+        </div>
+      </section>
+
+      <!-- MAIN CANDLESTICK CHART CARD -->
+      <section class="card chart-card">
+        <div class="chart-header">
+          <div class="chart-title">
+            <span class="dot-green"></span>
+            <strong>CLEAN PRICE ACTION + VOLUME PROFILE (VPVR) + 123 GEO &amp; FIB TARGET OVERLAY</strong>
+          </div>
+          <div class="chart-legend">
+            <span>VPVR: Buy/Sell</span> ·
+            <span>Geo Dots: <span class="txt-green">● GREEN PASS (%)</span> · <span class="txt-gray">○ GRAY WAIT</span> · <span class="txt-red">● RED FAIL (0%)</span></span>
+          </div>
+        </div>
+
+        <div class="layer-toggles">
+          <button class="toggle-chip active" data-layer="vpvr">VPVR</button>
+          <button class="toggle-chip active" data-layer="vwap">VWAP (Buy/Sell Delta)</button>
+          <button class="toggle-chip active" data-layer="delta">CANDLE DELTA</button>
+          <button class="toggle-chip active" data-layer="obi">OBI PRESSURE</button>
+          <button class="toggle-chip active" data-layer="sr">S/R LEVELS</button>
+          <button class="toggle-chip active" data-layer="geo">GEO PATTERN</button>
+          <button class="toggle-chip active" data-layer="fib">FIB TARGET ZONE</button>
+        </div>
+
+        <div class="ohlc-bar" id="ohlcBar">
+          <div class="ohlc-left" id="ohlcLeft">1m | O: -- H: -- L: -- C: -- | VOL: --</div>
+          <div class="ohlc-right" id="ohlcRight">BUY: -- SELL: -- | NET Δ: -- | OBI: --</div>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas id="mainChartCanvas"></canvas>
+          <div class="obi-floating-badge" id="obiFloatingBadge">OBI PRESSURE: 0.0%</div>
+        </div>
+
+        <!-- ACTIVE PATTERN & FIB TARGET FOOTER BAR -->
+        <div class="active-pattern-bar" id="activePatternBar">
+          <div class="ap-left">
+            <span class="badge-tag">LIVE STRUCTURE TRACKER</span>
+            <span id="apName">Scanning 123 verified patterns...</span>
+          </div>
+          <div class="ap-mid" id="apFibSummary">
+            <!-- Populated with Entry, TP1, TP2, SL -->
+          </div>
+          <div class="ap-right">
+            <span class="ap-score" id="apScore">--%</span>
+            <button class="btn-sm" id="btnUnpin" style="display:none;">UNPIN</button>
+            <button class="btn-sm primary" id="btnInspectActive">INSPECT</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 2: 123 PATTERN LIBRARY -->
+    <main id="tab-library" class="tab-panel">
+      <section class="card lib-controls-card">
+        <div class="lib-header-row">
+          <div>
+            <h2>123 पैटर्न लाइब्रेरी · MULTI-TIMEFRAME &amp; FIBONACCI TARGET ENGINE</h2>
+            <p class="formula-note">
+              Strict Formula: Overall % = Math.round((Green / Total) * 100) · Any Red Dot (FAIL) = 0% REJECTED · Future dots = AWAITING TEST · Targets computed via verified Harmonic Fib / Measured Move rules
+            </p>
+          </div>
+          <div class="lib-counts" id="libCounts">
+            <span class="count-pill">MATCHES: <strong id="cntTotal">0</strong></span>
+            <span class="count-pill bull">BULLISH: <strong id="cntBull">0</strong></span>
+            <span class="count-pill bear">BEARISH: <strong id="cntBear">0</strong></span>
+          </div>
+        </div>
+
+        <div class="filter-row">
+          <div class="filter-group">
+            <span class="filter-label">TIMEFRAME:</span>
+            <div class="btn-group" id="libTfFilter">
+              <button class="f-btn active" data-ltf="ALL">ALL TFs</button>
+              <button class="f-btn" data-ltf="1m">1m</button>
+              <button class="f-btn" data-ltf="5m">5m</button>
+              <button class="f-btn" data-ltf="15m">15m</button>
+              <button class="f-btn" data-ltf="4h">4h</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">BIAS:</span>
+            <div class="btn-group" id="libBiasFilter">
+              <button class="f-btn active" data-bias="BOTH">BOTH (BULL + BEAR)</button>
+              <button class="f-btn bull" data-bias="BULLISH">BULLISH</button>
+              <button class="f-btn bear" data-bias="BEARISH">BEARISH</button>
+            </div>
+          </div>
+
+          <div class="filter-group search-group">
+            <input type="text" id="libSearch" placeholder="Search 123 patterns by name or category (e.g. Bat, Gartley, Wyckoff)..." />
+          </div>
+        </div>
+
+        <div class="filter-row">
+          <div class="filter-group slider-group">
+            <span class="filter-label">MATCH % FILTER:</span>
+            <input type="range" id="libMinMatch" min="0" max="100" step="5" value="25" />
+            <span class="pct-pill" id="libMinMatchVal">25%+</span>
+            <div class="quick-pcts">
+              <button class="q-pct" data-pct="0">0%+</button>
+              <button class="q-pct active" data-pct="25">25%+</button>
+              <button class="q-pct" data-pct="50">50%+</button>
+              <button class="q-pct" data-pct="75">75%+</button>
+              <button class="q-pct" data-pct="100">100%</button>
+            </div>
+          </div>
+          <button class="toggle-chip active" id="btnHideRejected">HIDE REJECTED (0%): ON</button>
+        </div>
+      </section>
+
+      <section class="pattern-grid" id="patternGrid">
+        <!-- Populated dynamically -->
+      </section>
+
+      <div class="load-more-wrap">
+        <button class="btn-load-more" id="btnLoadMore">LOAD MORE PATTERNS ↓</button>
+      </div>
+    </main>
+
+    <!-- TAB 3: FORMULA LAB -->
+    <main id="tab-formula" class="tab-panel">
+      <section class="card formula-card">
+        <h2>फॉर्मूला लैब · VERIFIED PATTERN RATIOS &amp; FIBONACCI TARGET RULES</h2>
+        <p class="dim-text">
+          All 123 patterns are cross-checked against standard institutional technical analysis rules (Scott Carney Harmonics, Bulkowski Classical Measured Moves, Wyckoff Cause &amp; Effect, and Elliott Wave Fibonacci Extensions).
+        </p>
+
+        <div class="formula-grid">
+          <div class="formula-box">
+            <h3>1. Harmonic Patterns (Post-D Reversal)</h3>
+            <p class="note">Note: In a <strong>Bearish Harmonic</strong>, the final leg (C → D) rises UP into the Potential Reversal Zone (PRZ). The downward drop happens <em>after</em> Point D completes.</p>
+            <table class="ref-table">
+              <thead>
+                <tr><th>Pattern</th><th>B (of XA)</th><th>D / PRZ</th><th>TP1 &amp; TP2 Targets</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Gartley 222</td><td>61.8%</td><td>78.6% XA</td><td>38.2% &amp; 61.8% AD</td></tr>
+                <tr><td>Bat Pattern</td><td>38.2%–50%</td><td>88.6% XA</td><td>38.2% &amp; 61.8% AD</td></tr>
+                <tr><td>Alternate Bat</td><td>38.2%</td><td>113.0% XA</td><td>38.2% &amp; 61.8% AD</td></tr>
+                <tr><td>Butterfly</td><td>78.6%</td><td>127.2%–161.8% XA</td><td>38.2% &amp; 61.8% AD</td></tr>
+                <tr><td>Crab</td><td>38.2%–61.8%</td><td>161.8% XA</td><td>38.2% &amp; 61.8% AD</td></tr>
+                <tr><td>Deep Crab</td><td>88.6%</td><td>161.8% XA</td><td>38.2% &amp; 61.8% AD</td></tr>
+                <tr><td>Cypher</td><td>38.2%–61.8%</td><td>78.6% XC</td><td>38.2% &amp; 61.8% CD</td></tr>
+                <tr><td>Shark</td><td>C=113%–161.8% AB</td><td>88.6%–113% OX</td><td>50.0% &amp; 61.8% BC</td></tr>
+                <tr><td>5-0 Pattern</td><td>113%–161.8%</td><td>50.0% BC</td><td>61.8% &amp; 100% CD</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="formula-box">
+            <h3>2. Classical, Wyckoff &amp; Elliott Target Rules</h3>
+            <table class="ref-table">
+              <thead>
+                <tr><th>Category</th><th>Projection Basis</th><th>TP1 / TP2</th><th>Stop-Loss</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Classical Reversal (H&amp;S, Double/Triple Top/Bot, Cup)</td><td>Height (Peak to Neckline)</td><td>61.8% / 100% Height</td><td>Beyond Last Swing</td></tr>
+                <tr><td>Continuation (Flags, Pennants, Triangles, Wedges, Channels)</td><td>Flagpole / Pattern Width</td><td>61.8% / 100% Range</td><td>Opposite Boundary</td></tr>
+                <tr><td>Wyckoff (Accumulation / Distribution / Spring / UTAD)</td><td>Trading Range (Cause &amp; Effect)</td><td>61.8% / 100% Range</td><td>Beyond Spring / UTAD</td></tr>
+                <tr><td>Elliott Wave (Impulse / Zigzag / Flat / Diagonal)</td><td>Prior Impulse Wave Length</td><td>100% / 161.8% Fib</td><td>Invalidation Level</td></tr>
+              </tbody>
+            </table>
+
+            <h3 style="margin-top:16px;">3. Strict 3-State Dot Scoring Engine</h3>
+            <ul class="rule-list">
+              <li><span class="txt-green">● GREEN (PASS):</span> Swing point matches verified normalized ratio tolerance.</li>
+              <li><span class="txt-gray">○ GRAY (AWAITING):</span> Future completion leg (e.g. Point D / Breakout) not yet formed.</li>
+              <li><span class="txt-red">● RED (FAIL):</span> Structural invalidation → Overall Match forced to <strong>0% REJECTED</strong>.</li>
+              <li><strong>Formula:</strong> <code>Overall % = Math.round((GreenDots / TotalDots) * 100)</code></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- PATTERN INSPECTOR MODAL -->
+  <div class="modal-backdrop" id="inspectModal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <span class="badge-tag" id="mCategory">HARMONIC</span>
+          <span class="bias-badge" id="mBias">BEARISH</span>
+          <h3 id="mTitle">Pattern Name</h3>
+        </div>
+        <button class="modal-close" id="mClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-chart-wrap">
+          <canvas id="modalCanvas" width="680" height="220"></canvas>
+        </div>
+        <div class="modal-fib-grid" id="mFibGrid"></div>
+        <div class="modal-desc" id="mDesc"></div>
+        <div class="modal-points" id="mPoints"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-sm" id="mCloseBtn">CLOSE</button>
+        <button class="btn-sm primary" id="mPinBtn">PIN TO MAIN CHART</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULAR SCRIPTS -->
+  <script src="js/dataEngine.js"></script>
+  <script src="js/indicators.js"></script>
+  <script src="js/patterns.js"></script>
+  <script src="js/chartRenderer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
