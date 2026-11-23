@@ -138,6 +138,7 @@
           <button class="toggle-chip active" data-layer="rsi">RSI + MA</button>
           <button class="toggle-chip active" data-layer="macd">MACD</button>
           <button class="toggle-chip active" data-layer="macdCross">MACD SLOPE/CROSS</button>
+          <button class="toggle-chip active" data-layer="rsiCrash">RSI CRASH (1·3·5·15)</button>
           <button class="toggle-chip active" data-layer="crashDet">CRASH DETECTOR (4 TFs)</button>
           <button class="toggle-chip active" data-layer="burstDet">VOLUME BURST (4 TFs)</button>
         </div>
@@ -157,6 +158,13 @@
           <div class="chart-zoom-hud" id="chartZoomHud">
             <span id="chartZoomStatus">72 BARS · LIVE</span>
             <button class="zoom-reset-btn" id="btnResetZoom" title="Reset Zoom &amp; Pan" style="display:none;">↻ RESET</button>
+          </div>
+          <div class="rsi-crash-hud" id="rsiCrashHud">
+            <span class="rc-hud-title">⚠ RSI CRASH</span>
+            <span class="rc-tf-pill calm" data-rc-tf="1m">1m --</span>
+            <span class="rc-tf-pill calm" data-rc-tf="3m">3m --</span>
+            <span class="rc-tf-pill calm" data-rc-tf="5m">5m --</span>
+            <span class="rc-tf-pill calm" data-rc-tf="15m">15m --</span>
           </div>
           <div class="obi-floating-badge" id="obiFloatingBadge">OBI PRESSURE: 0.0%</div>
         </div>
