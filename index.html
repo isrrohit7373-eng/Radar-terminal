@@ -137,6 +137,8 @@
           <button class="toggle-chip active" data-layer="volDiv">VOL-PRICE DIV</button>
           <button class="toggle-chip active" data-layer="rsi">RSI + MA</button>
           <button class="toggle-chip active" data-layer="macd">MACD</button>
+          <button class="toggle-chip active" data-layer="crashDet">CRASH DETECTOR (4 TFs)</button>
+          <button class="toggle-chip active" data-layer="burstDet">VOLUME BURST (4 TFs)</button>
         </div>
 
         <div class="div-alert-strip" id="divAlertStrip">
@@ -151,6 +153,10 @@
 
         <div class="canvas-wrap">
           <canvas id="mainChartCanvas"></canvas>
+          <div class="chart-zoom-hud" id="chartZoomHud">
+            <span id="chartZoomStatus">72 BARS · LIVE</span>
+            <button class="zoom-reset-btn" id="btnResetZoom" title="Reset Zoom &amp; Pan" style="display:none;">↻ RESET</button>
+          </div>
           <div class="obi-floating-badge" id="obiFloatingBadge">OBI PRESSURE: 0.0%</div>
         </div>
 
@@ -185,6 +191,172 @@
             <span class="ap-score" id="apScore">--%</span>
             <button class="btn-sm" id="btnUnpin" style="display:none;">UNPIN</button>
             <button class="btn-sm primary" id="btnInspectActive">INSPECT</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- DEDICATED SUB-PANELS GROUP 1: CRASH DETECTOR (1m, 3m, 5m, 15m) -->
+      <section class="card detector-group-card crash-group" id="crashDetectorGroup">
+        <div class="det-group-header">
+          <div class="det-group-title">
+            <span class="badge-tag crash-tag">CRASH DETECTOR · 4 INDIVIDUAL TFs</span>
+            <strong>LONG LIQUIDATION &amp; DROP CASCADE SUB-PANELS (1m · 3m · 5m · 15m)</strong>
+          </div>
+          <div class="det-group-legend">
+            <span>Indicators: RSI · OBI · Vol Z-Score · Fib · Long Liq · 20/50/200 EMA · ATR/ATR% · OBV · BB · ADX · StdDev · HV%</span>
+          </div>
+        </div>
+        <div class="detector-grid">
+          <div class="detector-panel" id="crashPanel_1m">
+            <div class="det-head">
+              <div class="det-head-left">
+                <span class="tf-mini">1M</span>
+                <strong>CRASH (1m)</strong>
+                <span class="det-liq-tag">LONG LIQ</span>
+              </div>
+              <div class="det-head-right">
+                <span class="det-score" id="crashScore_1m">SCORE: --/100</span>
+                <span class="det-status-badge calm" id="crashBadge_1m">CALM</span>
+              </div>
+            </div>
+            <div class="det-canvas-wrap">
+              <canvas class="det-canvas" id="crashCanvas_1m"></canvas>
+            </div>
+            <div class="det-telemetry" id="crashTele_1m"></div>
+          </div>
+          <div class="detector-panel" id="crashPanel_3m">
+            <div class="det-head">
+              <div class="det-head-left">
+                <span class="tf-mini">3M</span>
+                <strong>CRASH (3m)</strong>
+                <span class="det-liq-tag">LONG LIQ</span>
+              </div>
+              <div class="det-head-right">
+                <span class="det-score" id="crashScore_3m">SCORE: --/100</span>
+                <span class="det-status-badge calm" id="crashBadge_3m">CALM</span>
+              </div>
+            </div>
+            <div class="det-canvas-wrap">
+              <canvas class="det-canvas" id="crashCanvas_3m"></canvas>
+            </div>
+            <div class="det-telemetry" id="crashTele_3m"></div>
+          </div>
+          <div class="detector-panel" id="crashPanel_5m">
+            <div class="det-head">
+              <div class="det-head-left">
+                <span class="tf-mini">5M</span>
+                <strong>CRASH (5m)</strong>
+                <span class="det-liq-tag">LONG LIQ</span>
+              </div>
+              <div class="det-head-right">
+                <span class="det-score" id="crashScore_5m">SCORE: --/100</span>
+                <span class="det-status-badge calm" id="crashBadge_5m">CALM</span>
+              </div>
+            </div>
+            <div class="det-canvas-wrap">
+              <canvas class="det-canvas" id="crashCanvas_5m"></canvas>
+            </div>
+            <div class="det-telemetry" id="crashTele_5m"></div>
+          </div>
+          <div class="detector-panel" id="crashPanel_15m">
+            <div class="det-head">
+              <div class="det-head-left">
+                <span class="tf-mini">15M</span>
+                <strong>CRASH (15m)</strong>
+                <span class="det-liq-tag">LONG LIQ</span>
+              </div>
+              <div class="det-head-right">
+                <span class="det-score" id="crashScore_15m">SCORE: --/100</span>
+                <span class="det-status-badge calm" id="crashBadge_15m">CALM</span>
+              </div>
+            </div>
+            <div class="det-canvas-wrap">
+              <canvas class="det-canvas" id="crashCanvas_15m"></canvas>
+            </div>
+            <div class="det-telemetry" id="crashTele_15m"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DEDICATED SUB-PANELS GROUP 2: VOLUME BURST DETECTOR (1m, 3m, 5m, 15m) -->
+      <section class="card detector-group-card burst-group" id="volumeBurstGroup">
+        <div class="det-group-header">
+          <div class="det-group-title">
+            <span class="badge-tag burst-tag">VOLUME BURST DETECTOR · 4 INDIVIDUAL TFs</span>
+            <strong>SHORT LIQUIDATION / SQUEEZE &amp; PUMP SUB-PANELS (1m · 3m · 5m · 15m)</strong>
+          </div>
+          <div class="det-group-legend">
+            <span>Indicators: RSI · OBI · Vol Z-Score · Fib · Short Squeeze · 20/50/200 EMA · ATR/ATR% · OBV · BB · ADX · StdDev · HV%</span>
+          </div>
+        </div>
+        <div class="detector-grid">
+          <div class="detector-panel" id="burstPanel_1m">
+            <div class="det-head">
+              <div class="det-head-left">
+                <span class="tf-mini">1M</span>
+                <strong>VOL BURST (1m)</strong>
+                <span class="det-liq-tag">SHORT SQZ</span>
+              </div>
+              <div class="det-head-right">
+                <span class="det-score" id="burstScore_1m">SCORE: --/100</span>
+                <span class="det-status-badge calm" id="burstBadge_1m">CALM</span>
+              </div>
+            </div>
+            <div class="det-canvas-wrap">
+              <canvas class="det-canvas" id="burstCanvas_1m"></canvas>
+            </div>
+            <div class="det-telemetry" id="burstTele_1m"></div>
+          </div>
+          <div class="detector-panel" id="burstPanel_3m">
+            <div class="det-head">
+              <div class="det-head-left">
+                <span class="tf-mini">3M</span>
+                <strong>VOL BURST (3m)</strong>
+                <span class="det-liq-tag">SHORT SQZ</span>
+              </div>
+              <div class="det-head-right">
+                <span class="det-score" id="burstScore_3m">SCORE: --/100</span>
+                <span class="det-status-badge calm" id="burstBadge_3m">CALM</span>
+              </div>
+            </div>
+            <div class="det-canvas-wrap">
+              <canvas class="det-canvas" id="burstCanvas_3m"></canvas>
+            </div>
+            <div class="det-telemetry" id="burstTele_3m"></div>
+          </div>
+          <div class="detector-panel" id="burstPanel_5m">
+            <div class="det-head">
+              <div class="det-head-left">
+                <span class="tf-mini">5M</span>
+                <strong>VOL BURST (5m)</strong>
+                <span class="det-liq-tag">SHORT SQZ</span>
+              </div>
+              <div class="det-head-right">
+                <span class="det-score" id="burstScore_5m">SCORE: --/100</span>
+                <span class="det-status-badge calm" id="burstBadge_5m">CALM</span>
+              </div>
+            </div>
+            <div class="det-canvas-wrap">
+              <canvas class="det-canvas" id="burstCanvas_5m"></canvas>
+            </div>
+            <div class="det-telemetry" id="burstTele_5m"></div>
+          </div>
+          <div class="detector-panel" id="burstPanel_15m">
+            <div class="det-head">
+              <div class="det-head-left">
+                <span class="tf-mini">15M</span>
+                <strong>VOL BURST (15m)</strong>
+                <span class="det-liq-tag">SHORT SQZ</span>
+              </div>
+              <div class="det-head-right">
+                <span class="det-score" id="burstScore_15m">SCORE: --/100</span>
+                <span class="det-status-badge calm" id="burstBadge_15m">CALM</span>
+              </div>
+            </div>
+            <div class="det-canvas-wrap">
+              <canvas class="det-canvas" id="burstCanvas_15m"></canvas>
+            </div>
+            <div class="det-telemetry" id="burstTele_15m"></div>
           </div>
         </div>
       </section>
@@ -371,6 +543,7 @@
   <script src="js/patterns.js"></script>
   <script src="js/chartRenderer.js"></script>
   <script src="js/confluenceLab.js"></script>
+  <script src="js/crashBurstDetectors.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
