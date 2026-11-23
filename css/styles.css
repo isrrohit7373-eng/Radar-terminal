@@ -1115,3 +1115,55 @@ body {
   border-color: rgba(0, 230, 118, 0.55);
   color: #00ff88;
 }
+
+
+/* =========================================================
+   INDIVIDUAL RSI & MACD SUB-CHARTS INSIDE EACH DETECTOR PANEL
+   ========================================================= */
+.det-canvas-wrap {
+  height: 116px;
+}
+.det-mini-pane {
+  border-top: 1px solid var(--border);
+  background: #060a11;
+}
+.det-mini-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: #09101c;
+  border-bottom: 1px solid rgba(30, 45, 68, 0.75);
+  font-size: 9.5px;
+  font-weight: 800;
+  font-family: monospace;
+  color: var(--muted);
+}
+.det-mini-head b {
+  color: var(--text);
+}
+.det-mini-canvas {
+  width: 100%;
+  height: 86px;
+  display: block;
+}
+.det-div-pill {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 8.5px;
+  font-weight: 800;
+  margin-left: 3px;
+}
+.det-div-pill.bear {
+  background: var(--red-soft);
+  color: #ff6b7a;
+  border: 1px solid rgba(255, 71, 87, 0.55);
+}
+.det-div-pill.bull {
+  background: var(--green-soft);
+  color: #00ff88;
+  border: 1px solid rgba(0, 230, 118, 0.55);
+}
