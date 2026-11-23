@@ -16,7 +16,7 @@
     visibleCards: 24,
     pinnedUid: null,
     sonarOn: true,
-    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, emaSr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true, macdCross: true, crashDet: true, burstDet: true },
+    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, emaSr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true, macdCross: true, rsiCrash: true, crashDet: true, burstDet: true },
     macdCfg: (function () {
       try {
         const saved = JSON.parse(localStorage.getItem('radar_v4_macd_cfg'));
@@ -289,8 +289,35 @@
       ? window.Indicators.detectMacdSlopeSignals(candles, macdData, AppState.macdCfg)
       : [];
 
+    const rsiCrashData = (window.CrashBurstDetectors && window.CrashBurstDetectors.computeRsiCrashAlerts)
+      ? window.CrashBurstDetectors.computeRsiCrashAlerts({
+          candlesByTf: window.DataEngine.state.candles,
+          liveObi: obi,
+          mode: window.DataEngine.state.mode,
+          mainCandles: candles,
+          mainTf: AppState.activeTf
+        })
+      : null;
+
+    // Update Shining Yellow RSI Crash Multi-TF HUD (1m, 3m, 5m, 15m) inside Main Chart
+    const rcHud = $('rsiCrashHud');
+    if (rcHud) {
+      rcHud.style.display = AppState.layers.rsiCrash ? 'inline-flex' : 'none';
+      if (AppState.layers.rsiCrash && rsiCrashData) {
+        const hasAny = (rsiCrashData.liveActiveTfs || []).length > 0;
+        rcHud.classList.toggle('has-active', hasAny);
+        const pillsHtml = (rsiCrashData.tfStatuses || []).map(s => {
+          const cls = s.isAlert ? 'shining-yellow' : (s.severity === 'WATCH' ? 'watch-yellow' : 'calm');
+          const rTxt = s.rsi != null ? s.rsi.toFixed(0) : '--';
+          const tag = s.isAlert ? `⚡${s.tf} RSI:${rTxt}` : `${s.tf} ${rTxt}`;
+          return `<span class="rc-tf-pill ${cls}" title="${s.tf.toUpperCase()} Crash Score: ${s.crashScore.toFixed(0)} | ${s.reason}">${tag}</span>`;
+        }).join('');
+        rcHud.innerHTML = `<span class="rc-hud-title">⚠ RSI CRASH</span>${pillsHtml}`;
+      }
+    }
+
     window.ChartRenderer.drawMainChart($('mainChartCanvas'), {
-      candles, vwap, vpvr, srLevels, activeMatch, layers: effectiveLayers, divergences, dynamicMA, macdSignals
+      candles, vwap, vpvr, srLevels, activeMatch, layers: effectiveLayers, divergences, dynamicMA, macdSignals, rsiCrashData
     });
 
     const rsiWrap = $('rsiPaneWrap');

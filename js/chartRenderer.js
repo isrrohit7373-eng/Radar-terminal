@@ -658,6 +658,111 @@ window.ChartRenderer = (function () {
       });
     }
 
+
+    // 7D. RSI CRASH ALERT PROJECTION ON MAIN CHART (SHINING YELLOW · 1m, 3m, 5m, 15m)
+    if (layers.rsiCrash && opts.rsiCrashData) {
+      const markers = opts.rsiCrashData.candleMarkers || [];
+      markers.forEach(m => {
+        if (m.idx < startIdx || m.idx >= endIdx) return;
+        const x = xOfGlobal(m.idx);
+        const yHigh = yOf(m.price);
+        const yLow = yOf(m.low != null ? m.low : m.price);
+        const isExtreme = m.severity === 'EXTREME';
+        const beaconY = Math.max(padT + 22, yHigh - 22);
+
+        ctx.save();
+
+        // Vertical Shining Yellow Aura Beam behind the alert candle
+        const beamGrad = ctx.createLinearGradient(0, beaconY, 0, Math.min(H - padB, yLow + 18));
+        beamGrad.addColorStop(0, isExtreme ? 'rgba(250, 204, 21, 0.34)' : 'rgba(250, 204, 21, 0.20)');
+        beamGrad.addColorStop(1, 'rgba(250, 204, 21, 0.02)');
+        ctx.fillStyle = beamGrad;
+        const beamW = Math.max(8, candleW + 4);
+        ctx.fillRect(x - beamW / 2, beaconY, beamW, Math.max(18, Math.min(H - padB, yLow + 14) - beaconY));
+
+        // Dashed golden drop connector to candle high
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(x, beaconY + 6);
+        ctx.lineTo(x, yHigh - 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Shining Yellow Glowing Warning Triangle / Diamond Beacon
+        ctx.shadowColor = '#facc15';
+        ctx.shadowBlur = isExtreme ? 16 : 11;
+        ctx.fillStyle = isExtreme ? '#fef08a' : '#facc15';
+        ctx.strokeStyle = '#713f12';
+        ctx.lineWidth = 1.2;
+
+        const r = isExtreme ? 6.5 : 5.2;
+        ctx.beginPath();
+        ctx.moveTo(x, beaconY - r);
+        ctx.lineTo(x + r, beaconY + r * 0.75);
+        ctx.lineTo(x - r, beaconY + r * 0.75);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Compact Shining Yellow Pill Tag with TF (e.g. ⚠ 1m, ⚠ 3·5m, ⚠ 1·3·5·15m)
+        ctx.shadowBlur = 8;
+        ctx.font = 'bold 9px monospace';
+        const tag = m.label;
+        const tw = ctx.measureText(tag).width + 8;
+        const boxX = Math.max(padL + 2, Math.min(W - padR - tw - 4, x - tw / 2));
+        const boxY = Math.max(padT + 2, beaconY - r - 15);
+        ctx.fillStyle = isExtreme ? 'rgba(250, 204, 21, 0.96)' : 'rgba(234, 179, 8, 0.90)';
+        ctx.fillRect(boxX, boxY, tw, 13);
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX, boxY, tw, 13);
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#070b12';
+        ctx.textAlign = 'left';
+        ctx.fillText(tag, boxX + 4, boxY + 9.5);
+        ctx.restore();
+      });
+
+      // Live Multi-TF Shining Yellow Projection Line on Current Candle if any TF (1,3,5,15) is firing
+      const liveActive = opts.rsiCrashData.liveActiveTfs || [];
+      if (liveActive.length > 0 && vw.rightOffset === 0) {
+        const lastC = vis[vis.length - 1];
+        const xLast = xOfVis(vis.length - 1);
+        const yLast = yOf(lastC.high);
+        const yBanner = Math.max(padT + 26, yLast - 32);
+
+        ctx.save();
+        ctx.shadowColor = '#facc15';
+        ctx.shadowBlur = 14;
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(xLast, yLast);
+        ctx.lineTo(W - padR - 4, yLast);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const bannerTxt = `⚡ RSI CRASH [${liveActive.join(' · ')}]`;
+        ctx.font = 'bold 10px monospace';
+        const bw = ctx.measureText(bannerTxt).width + 12;
+        const bx = Math.max(padL + 8, Math.min(W - padR - bw - 6, xLast - bw / 2));
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(bx, yBanner - 12, bw, 16);
+        ctx.strokeStyle = '#fef9c3';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(bx, yBanner - 12, bw, 16);
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#070b12';
+        ctx.fillText(bannerTxt, bx + 6, yBanner);
+        ctx.restore();
+      }
+    }
+
     // 8. Live Current Price Line & Tag on Right Axis
     const lastPrice = vis[vis.length - 1].close;
     const yNow = yOf(lastPrice);

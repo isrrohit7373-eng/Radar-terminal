@@ -1121,8 +1121,165 @@ window.CrashBurstDetectors = (function () {
     if (showBurst) renderGroup(burstGroup, 'burst', 'burst', analyses);
   }
 
+
+  function computeRsiCrashAlerts({ candlesByTf, liveObi, mode, mainCandles, mainTf }) {
+    ensure3mCandles(mode);
+
+    const tfStatuses = [];
+    const rawEvents = []; // { time, tf, severity, rsi, reason }
+
+    DETECTOR_TFS.forEach(tf => {
+      const candles = getCandlesForTf(tf, candlesByTf, mode);
+      const a = analyzeTimeframe(tf, candles, liveObi);
+      if (!a) {
+        tfStatuses.push({
+          tf, rsi: null, crashScore: 0, severity: 'CALM', isAlert: false, reason: 'WAIT'
+        });
+        return;
+      }
+
+      const n = a.candles.length;
+      const last = n - 1;
+      const rsiArr = a.rsiData.rsi || [];
+      const lastRsi = a.latest.rsi;
+      const prevRsi3 = last >= 3 && rsiArr[last - 3] != null ? rsiArr[last - 3] : lastRsi;
+      const rsiDropNow = lastRsi < 38 || (lastRsi - prevRsi3) < -6;
+      const bearDivNow = a.divergences.hasBearRsiDiv;
+      const scoreNow = a.latest.crashScore;
+
+      let severity = 'CALM';
+      let reason = 'CALM';
+      if (scoreNow >= 75 || (scoreNow >= 55 && bearDivNow)) {
+        severity = 'EXTREME';
+        reason = bearDivNow ? 'EXTREME+DIV' : 'EXTREME RSI';
+      } else if (scoreNow >= 55 || (scoreNow >= 35 && (rsiDropNow || bearDivNow)) || (rsiDropNow && bearDivNow)) {
+        severity = 'ALERT';
+        reason = bearDivNow ? 'BEAR RSI DIV' : (rsiDropNow ? 'RSI DROP' : 'CRASH ALERT');
+      } else if (scoreNow >= 35 || rsiDropNow || bearDivNow) {
+        severity = 'WATCH';
+        reason = bearDivNow ? 'RSI DIV' : (rsiDropNow ? 'RSI DROP' : 'WATCH');
+      }
+
+      const isAlert = severity === 'EXTREME' || severity === 'ALERT';
+      tfStatuses.push({
+        tf,
+        rsi: lastRsi,
+        rsiMA: a.latest.rsiMA,
+        crashScore: scoreNow,
+        rsiDrop: rsiDropNow,
+        bearDiv: bearDivNow,
+        severity,
+        isAlert,
+        reason
+      });
+
+      // Collect historical & live RSI Crash Alert events across last 60 bars of this TF
+      const scanStart = Math.max(3, n - 60);
+      const bearDivSet = new Set((a.divergences.bearRsiDivs || []).map(d => d.idx2));
+      let lastEvtIdx = -3;
+      for (let i = scanStart; i < n; i++) {
+        const r = rsiArr[i];
+        const rPrev = rsiArr[i - 3];
+        if (r == null) continue;
+        const rDrop = r < 36 || (rPrev != null && (r - rPrev) < -6.5);
+        const isDiv = bearDivSet.has(i);
+        const sc = a.crashScoreSeries[i] || 0;
+
+        const barExtreme = sc >= 75 || (sc >= 55 && isDiv);
+        const barAlert = sc >= 55 && (r < 46 || rDrop) || isDiv || (sc >= 42 && rDrop);
+
+        if ((barExtreme || barAlert) && (i - lastEvtIdx >= 2 || i === last)) {
+          rawEvents.push({
+            time: a.candles[i].time,
+            tf,
+            severity: barExtreme ? 'EXTREME' : 'ALERT',
+            rsi: r,
+            score: sc,
+            reason: isDiv ? 'DIV' : (rDrop ? 'RSI' : 'CRASH')
+          });
+          lastEvtIdx = i;
+        }
+      }
+    });
+
+    // Map multi-TF events (1m, 3m, 5m, 15m) onto Main Chart candle indices
+    const candleMap = new Map(); // mainIdx -> { idx, price, tfs: Set, severity, reasons: Set }
+    if (mainCandles && mainCandles.length) {
+      const mLen = mainCandles.length;
+      const tfStepMs = mLen >= 2 ? Math.max(60000, mainCandles[mLen - 1].time - mainCandles[mLen - 2].time) : 60000;
+
+      const findMainIdx = (evtTime) => {
+        if (!Number.isFinite(evtTime)) return -1;
+        // Binary search / reverse scan from latest candle
+        for (let i = mLen - 1; i >= 0; i--) {
+          const ct = mainCandles[i].time;
+          if (evtTime >= ct && evtTime < ct + tfStepMs) return i;
+          if (evtTime > mainCandles[mLen - 1].time) return mLen - 1;
+          if (ct < evtTime - tfStepMs * 2) break;
+        }
+        // Fallback nearest within half step
+        let bestIdx = -1, bestDiff = tfStepMs;
+        for (let i = Math.max(0, mLen - 120); i < mLen; i++) {
+          const diff = Math.abs(mainCandles[i].time - evtTime);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestIdx = i;
+          }
+        }
+        return bestIdx;
+      };
+
+      rawEvents.forEach(ev => {
+        const mIdx = findMainIdx(ev.time);
+        if (mIdx < 0) return;
+        let entry = candleMap.get(mIdx);
+        if (!entry) {
+          entry = {
+            idx: mIdx,
+            price: mainCandles[mIdx].high,
+            low: mainCandles[mIdx].low,
+            tfs: new Set(),
+            severity: ev.severity,
+            reasons: new Set()
+          };
+          candleMap.set(mIdx, entry);
+        }
+        entry.tfs.add(ev.tf);
+        entry.reasons.add(ev.reason);
+        if (ev.severity === 'EXTREME') entry.severity = 'EXTREME';
+      });
+    }
+
+    const order = { '1m': 1, '3m': 2, '5m': 3, '15m': 4 };
+    const candleMarkers = Array.from(candleMap.values()).map(m => {
+      const sortedTfs = Array.from(m.tfs).sort((a, b) => (order[a] || 9) - (order[b] || 9));
+      const shortTfs = sortedTfs.map(t => t.replace('m', '')).join('·');
+      return {
+        idx: m.idx,
+        price: m.price,
+        low: m.low,
+        tfs: sortedTfs,
+        label: sortedTfs.length === 1 ? `⚠ ${sortedTfs[0]}` : `⚠ ${shortTfs}m`,
+        severity: m.severity,
+        reasons: Array.from(m.reasons)
+      };
+    }).sort((a, b) => a.idx - b.idx);
+
+    const liveActiveTfs = tfStatuses.filter(s => s.isAlert).map(s => s.tf);
+    const liveWatchTfs = tfStatuses.filter(s => s.severity === 'WATCH').map(s => s.tf);
+
+    return {
+      tfStatuses,
+      candleMarkers,
+      liveActiveTfs,
+      liveWatchTfs,
+      mainTf
+    };
+  }
+
   return {
     DETECTOR_TFS,
+    computeRsiCrashAlerts,
     updateAndRender
   };
 })();
