@@ -18,6 +18,7 @@
     sonarOn: true,
     layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true },
     evaluations: { '1m': [], '5m': [], '15m': [], '4h': [] },
+    decisions: {},
     inspectedObj: null
   };
 
@@ -32,6 +33,28 @@
       const candles = window.DataEngine.state.candles[tf] || [];
       AppState.evaluations[tf] = window.PatternsEngine.evaluateTimeframe(candles, tf);
     });
+    runSmartDecisions();
+  }
+
+  function runSmartDecisions() {
+    const st = window.DataEngine.state;
+    const nextDecisions = {};
+    window.DataEngine.TIMEFRAMES.forEach(tf => {
+      const candles = st.candles[tf] || [];
+      nextDecisions[tf] = window.Indicators.computeSmartDecision({
+        tf,
+        candles,
+        evaluations: AppState.evaluations[tf] || [],
+        minMatch: AppState.dashMinMatch,
+        liveObi: tf === AppState.activeTf ? st.obi : null
+      });
+    });
+    AppState.decisions = nextDecisions;
+  }
+
+  function fmtSignedPct(val) {
+    const num = Number(val) || 0;
+    return `${num >= 0 ? '+' : ''}${num.toFixed(1)}%`;
   }
 
   function getActivePatternForChart() {
@@ -84,21 +107,34 @@
     const labels = { '1m': '1-MINUTE (1m)', '5m': '5-MINUTE (5m)', '15m': '15-MINUTE (15m)', '4h': '4-HOUR (4h)' };
 
     window.DataEngine.TIMEFRAMES.forEach(tf => {
-      const list = AppState.evaluations[tf] || [];
-      const qualified = list.filter(e => !e.hasRed && e.overallPct >= AppState.dashMinMatch);
-      const bull = qualified.filter(e => e.pattern.bias === 'BULLISH').length;
-      const bear = qualified.filter(e => e.pattern.bias === 'BEARISH').length;
+      const d = AppState.decisions[tf];
+      const bull = d ? d.patterns.bullCount : 0;
+      const bear = d ? d.patterns.bearCount : 0;
       const tot = bull + bear;
+      const bullStr = d && bull ? ` (${d.patterns.bullAvgStr}%)` : '';
+      const bearStr = d && bear ? ` (${d.patterns.bearAvgStr}%)` : '';
 
       // Update top bias strip
       const pill = document.querySelector(`[data-tf-bias="${tf}"]`);
       if (pill) {
-        const biasTxt = bull > bear ? 'BULLISH' : bear > bull ? 'BEARISH' : 'NEUTRAL';
+        const biasTxt = d
+          ? (d.score >= 18 ? 'BULLISH' : d.score <= -18 ? 'BEARISH' : 'NEUTRAL')
+          : (bull > bear ? 'BULLISH' : bear > bull ? 'BEARISH' : 'NEUTRAL');
         pill.textContent = `${tf}: ${biasTxt}`;
         pill.className = 'bias-pill ' + biasTxt.toLowerCase();
       }
 
-      // Render dashboard summary card
+      const instObi = d ? d.obi.instant : 0;
+      const avgObi = d ? d.obi.avg5 : 0;
+      const posAvg = d ? d.obi.posAvg : 0;
+      const negAvg = d ? d.obi.negAvg : 0;
+      const instCls = instObi >= 0 ? 'txt-green' : 'txt-red';
+      const avgCls = avgObi >= 0 ? 'txt-green' : 'txt-red';
+      const vwapAbove = d ? d.trend.priceAboveVwap : true;
+      const actionTxt = d ? d.action : 'WAIT';
+      const actionCls = d ? d.actionClass : 'wait';
+
+      // Render dashboard summary card with CENTER OBI CHIP + Per-TF Decision Pill
       const card = document.createElement('div');
       card.className = 'tf-card' + (tf === AppState.activeTf ? ' active' : '');
       card.innerHTML = `
@@ -106,13 +142,78 @@
           <span>${labels[tf]}</span>
           <span class="tf-tot">TOT: ${tot}</span>
         </div>
+        <div class="tf-obi-center">
+          <div class="tf-obi-row">
+            <span class="obi-chip-lbl">OBI INST</span>
+            <strong class="${instCls}">${fmtSignedPct(instObi)}</strong>
+            <span class="obi-sep">|</span>
+            <span class="obi-chip-lbl">AVG(5)</span>
+            <strong class="${avgCls}">${fmtSignedPct(avgObi)}</strong>
+          </div>
+          <div class="tf-obi-split">
+            <span class="txt-green">+AVG: ${fmtSignedPct(posAvg)}</span>
+            <span class="txt-red">-AVG: ${fmtSignedPct(negAvg)}</span>
+          </div>
+        </div>
         <div class="tf-card-counts">
-          <span class="txt-green">BULL: ${bull}</span>
-          <span class="txt-red">BEAR: ${bear}</span>
+          <span class="txt-green">BULL: ${bull}<small class="str-dim">${bullStr}</small></span>
+          <span class="txt-red">BEAR: ${bear}<small class="str-dim">${bearStr}</small></span>
+        </div>
+        <div class="tf-card-footer">
+          <span class="mini-vwap ${vwapAbove ? 'bull' : 'bear'}">VWAP ${vwapAbove ? '▲' : '▼'}</span>
+          <span class="decision-pill sm ${actionCls}">${actionTxt}</span>
         </div>
       `;
       card.addEventListener('click', () => switchTimeframe(tf));
       grid.appendChild(card);
+    });
+  }
+
+  function renderSmartActionMatrix() {
+    const tbody = $('smartMatrixBody');
+    if (!tbody) return;
+
+    const master = window.Indicators.computeMasterMatrix(AppState.decisions);
+    const vwapEl = $('masterVwapAlign');
+    if (vwapEl) {
+      vwapEl.textContent = `VWAP ALIGN: ${master.vwapAlignmentLabel}`;
+      vwapEl.className = `vwap-align-pill ${master.vwapAlignmentClass}`;
+    }
+
+    const masterEl = $('masterDecisionPill');
+    if (masterEl) {
+      masterEl.textContent = `MASTER: ${master.action} (${master.score >= 0 ? '+' : ''}${master.score})`;
+      masterEl.className = `decision-pill ${master.actionClass}`;
+    }
+
+    tbody.innerHTML = '';
+    window.DataEngine.TIMEFRAMES.forEach(tf => {
+      const d = AppState.decisions[tf];
+      if (!d) return;
+
+      const instCls = d.obi.instant >= 0 ? 'txt-green' : 'txt-red';
+      const avgCls = d.obi.avg5 >= 0 ? 'txt-green' : 'txt-red';
+      const vwapCls = d.trend.priceAboveVwap ? 'txt-green' : 'txt-red';
+      const emaCls = d.trend.emaBull ? 'txt-green' : 'txt-red';
+      const rsiTxt = d.rsi.val !== null ? d.rsi.val.toFixed(1) : '--';
+      const rsiCls = d.rsi.bull === true ? 'txt-green' : d.rsi.bull === false ? 'txt-red' : 'txt-gray';
+      const macdCls = d.macd.bull ? 'txt-green' : 'txt-red';
+      const scoreCls = d.score >= 18 ? 'txt-green' : d.score <= -18 ? 'txt-red' : 'txt-amber';
+
+      const tr = document.createElement('tr');
+      tr.className = tf === AppState.activeTf ? 'active-row' : '';
+      tr.innerHTML = `
+        <td><strong>${tf.toUpperCase()}</strong></td>
+        <td><span class="decision-pill sm ${d.actionClass}">${d.action}</span></td>
+        <td><span class="${instCls}">${fmtSignedPct(d.obi.instant)}</span> / <strong class="${avgCls}">${fmtSignedPct(d.obi.avg5)}</strong></td>
+        <td><span class="txt-green">${fmtSignedPct(d.obi.posAvg)}</span> · <span class="txt-red">${fmtSignedPct(d.obi.negAvg)}</span></td>
+        <td><span class="${vwapCls}">${d.trend.priceAboveVwap ? '▲ ABOVE' : '▼ BELOW'} (${fmtSignedPct(d.trend.vwapDiffPct)})</span> · <span class="${emaCls}">EMA ${d.trend.emaBull ? '▲' : '▼'}</span></td>
+        <td><span class="${rsiCls}">RSI ${rsiTxt} ${d.rsi.bull === true ? '▲' : d.rsi.bull === false ? '▼' : ''}</span> · <span class="${macdCls}">MACD ${d.macd.bull ? '▲' : '▼'}</span></td>
+        <td><span class="txt-green">${d.patterns.bullCount}B (${d.patterns.bullAvgStr}%)</span> / <span class="txt-red">${d.patterns.bearCount}S (${d.patterns.bearAvgStr}%)</span></td>
+        <td><strong class="${scoreCls}">${d.score >= 0 ? '+' : ''}${d.score}</strong></td>
+      `;
+      tr.addEventListener('click', () => switchTimeframe(tf));
+      tbody.appendChild(tr);
     });
   }
 
@@ -354,8 +455,10 @@
   }
 
   function renderAll() {
+    runSmartDecisions();
     renderHeader();
     renderBiasStripAndSummary();
+    renderSmartActionMatrix();
     if (AppState.activeTab === 'terminal') renderMainChartSection();
     if (AppState.activeTab === 'library') renderPatternLibrary();
   }
@@ -397,7 +500,9 @@
     $('dashMinMatch').addEventListener('input', e => {
       AppState.dashMinMatch = parseInt(e.target.value, 10);
       $('dashMinMatchVal').textContent = AppState.dashMinMatch + '%+';
+      runSmartDecisions();
       renderBiasStripAndSummary();
+      renderSmartActionMatrix();
       renderMainChartSection();
     });
 

@@ -300,6 +300,197 @@ window.Indicators = (function () {
     };
   }
 
+
+  function computeOBIProfile(candles, windowSize = 5) {
+    if (!candles || !candles.length) {
+      return { instant: 0, avg5: 0, posAvg: 0, negAvg: 0, trend: 'NEUTRAL', series: [] };
+    }
+    const slice = candles.slice(-Math.max(1, windowSize));
+    const series = slice.map(c => {
+      const buy = Number(c.buyVol) || 0;
+      const sell = Number(c.sellVol) || 0;
+      const total = buy + sell;
+      if (total <= 0) return 0;
+      return +(((buy - sell) / total) * 100).toFixed(1);
+    });
+
+    const instant = series[series.length - 1] || 0;
+    const sumAll = series.reduce((acc, v) => acc + v, 0);
+    const avg5 = +(sumAll / series.length).toFixed(1);
+
+    const posVals = series.filter(v => v > 0);
+    const negVals = series.filter(v => v < 0);
+    const posAvg = posVals.length ? +(posVals.reduce((a, b) => a + b, 0) / posVals.length).toFixed(1) : 0;
+    const negAvg = negVals.length ? +(negVals.reduce((a, b) => a + b, 0) / negVals.length).toFixed(1) : 0;
+
+    let trend = 'NEUTRAL';
+    if (avg5 >= 5) trend = 'BULLISH';
+    else if (avg5 <= -5) trend = 'BEARISH';
+
+    return { instant, avg5, posAvg, negAvg, trend, series };
+  }
+
+  function computeTrendFilter(candles) {
+    if (!candles || !candles.length) {
+      return { vwap: 0, priceAboveVwap: false, vwapDiffPct: 0, emaFast: 0, emaSlow: 0, emaBull: false, trend: 'NEUTRAL', aligned: false };
+    }
+    const lastClose = candles[candles.length - 1].close;
+    const vwapObj = computeVWAP(candles);
+    const vwap = vwapObj.latest || lastClose;
+    const priceAboveVwap = lastClose >= vwap;
+    const vwapDiffPct = vwap > 0 ? +(((lastClose - vwap) / vwap) * 100).toFixed(2) : 0;
+
+    const closes = candles.map(c => c.close);
+    const ema20Arr = computeEMA(closes, 20);
+    const ema50Arr = computeEMA(closes, 50);
+    const emaFast = ema20Arr[ema20Arr.length - 1] ?? lastClose;
+    const emaSlow = ema50Arr[ema50Arr.length - 1] ?? lastClose;
+    const emaBull = emaFast >= emaSlow;
+
+    const aligned = (priceAboveVwap && emaBull) || (!priceAboveVwap && !emaBull);
+    let trend = 'NEUTRAL';
+    if (priceAboveVwap && emaBull) trend = 'BULLISH';
+    else if (!priceAboveVwap && !emaBull) trend = 'BEARISH';
+
+    return { vwap, priceAboveVwap, vwapDiffPct, emaFast, emaSlow, emaBull, trend, aligned };
+  }
+
+  function computeSmartDecision({ tf, candles, evaluations = [], minMatch = 25, liveObi = null }) {
+    const obi = computeOBIProfile(candles, 5);
+    const effectiveInstant = (liveObi !== null && !Number.isNaN(Number(liveObi))) ? +Number(liveObi).toFixed(1) : obi.instant;
+    const trend = computeTrendFilter(candles);
+    const rsiData = computeRSI(candles, 14, 14);
+    const macdData = computeMACD(candles, 12, 26, 9);
+    const divs = detectDivergences(candles, rsiData.rsi);
+
+    const qualified = (evaluations || []).filter(e => !e.hasRed && e.overallPct >= minMatch);
+    const bullPats = qualified.filter(e => e.pattern.bias === 'BULLISH');
+    const bearPats = qualified.filter(e => e.pattern.bias === 'BEARISH');
+    const bullCount = bullPats.length;
+    const bearCount = bearPats.length;
+    const bullAvgStr = bullCount ? Math.round(bullPats.reduce((s, e) => s + e.overallPct, 0) / bullCount) : 0;
+    const bearAvgStr = bearCount ? Math.round(bearPats.reduce((s, e) => s + e.overallPct, 0) / bearCount) : 0;
+
+    // Pillar 1: OBI Pressure (-25 to +25) — weighted 70% on 5-period smoothed avg, 30% on instant
+    const blendedObi = obi.avg5 * 0.7 + effectiveInstant * 0.3;
+    const obiScore = Math.max(-25, Math.min(25, (blendedObi / 40) * 25));
+
+    // Pillar 2: VWAP & EMA Trend Filter (-25 to +25)
+    let trendScore = 0;
+    trendScore += trend.priceAboveVwap ? 15 : -15;
+    trendScore += trend.emaBull ? 10 : -10;
+
+    // Pillar 3: Momentum (RSI vs MA + MACD Hist + Divergence) (-25 to +25)
+    let momScore = 0;
+    const rsiBull = rsiData.latestRsi !== null && rsiData.latestRsiMA !== null ? rsiData.latestRsi >= rsiData.latestRsiMA : null;
+    if (rsiBull === true) momScore += 10;
+    else if (rsiBull === false) momScore -= 10;
+
+    const macdBull = macdData.latestHist >= 0;
+    momScore += macdBull ? 10 : -10;
+
+    const lastRsiDiv = divs.rsiDivs[divs.rsiDivs.length - 1];
+    if (lastRsiDiv) momScore += lastRsiDiv.type === 'BULL' ? 5 : -5;
+    momScore = Math.max(-25, Math.min(25, momScore));
+
+    // Pillar 4: Qualified Patterns Count & Strength (-25 to +25)
+    const bullWeight = bullCount * (bullAvgStr / 100);
+    const bearWeight = bearCount * (bearAvgStr / 100);
+    const totalWeight = bullWeight + bearWeight;
+    const patScore = totalWeight > 0 ? ((bullWeight - bearWeight) / totalWeight) * 25 : 0;
+
+    const totalScore = Math.round(obiScore + trendScore + momScore + patScore);
+    const confidence = Math.min(99, Math.max(10, Math.abs(totalScore)));
+
+    let action = 'WAIT';
+    let actionClass = 'wait';
+    if (totalScore >= 45) { action = 'STRONG BUY'; actionClass = 'strong-buy'; }
+    else if (totalScore >= 18) { action = 'BUY'; actionClass = 'buy'; }
+    else if (totalScore <= -45) { action = 'STRONG SELL'; actionClass = 'strong-sell'; }
+    else if (totalScore <= -18) { action = 'SELL'; actionClass = 'sell'; }
+
+    return {
+      tf,
+      action,
+      actionClass,
+      score: totalScore,
+      confidence,
+      obi: { ...obi, instant: effectiveInstant },
+      trend,
+      rsi: { val: rsiData.latestRsi, ma: rsiData.latestRsiMA, bull: rsiBull },
+      macd: { hist: macdData.latestHist, bull: macdBull },
+      patterns: {
+        total: bullCount + bearCount,
+        bullCount,
+        bearCount,
+        bullAvgStr,
+        bearAvgStr,
+        dominantBias: bullWeight > bearWeight ? 'BULLISH' : bearWeight > bullWeight ? 'BEARISH' : 'NEUTRAL'
+      },
+      pillars: {
+        obiScore: Math.round(obiScore),
+        trendScore: Math.round(trendScore),
+        momScore: Math.round(momScore),
+        patScore: Math.round(patScore)
+      }
+    };
+  }
+
+  function computeMasterMatrix(decisionsMap) {
+    const weights = { '1m': 0.15, '5m': 0.20, '15m': 0.30, '4h': 0.35 };
+    const tfs = Object.keys(decisionsMap);
+    let weightedScore = 0;
+    let totalW = 0;
+    let vwapBullCount = 0;
+    let vwapBearCount = 0;
+
+    tfs.forEach(tf => {
+      const d = decisionsMap[tf];
+      if (!d) return;
+      const w = weights[tf] || 0.25;
+      weightedScore += d.score * w;
+      totalW += w;
+      if (d.trend.priceAboveVwap) vwapBullCount++;
+      else vwapBearCount++;
+    });
+
+    const masterScore = totalW > 0 ? Math.round(weightedScore / totalW) : 0;
+    let action = 'WAIT';
+    let actionClass = 'wait';
+    if (masterScore >= 42) { action = 'STRONG BUY'; actionClass = 'strong-buy'; }
+    else if (masterScore >= 16) { action = 'BUY'; actionClass = 'buy'; }
+    else if (masterScore <= -42) { action = 'STRONG SELL'; actionClass = 'strong-sell'; }
+    else if (masterScore <= -16) { action = 'SELL'; actionClass = 'sell'; }
+
+    const totalTfs = tfs.length || 4;
+    let vwapAlignmentLabel = `MIXED (${vwapBullCount}B / ${vwapBearCount}S)`;
+    let vwapAlignmentClass = 'neutral';
+    if (vwapBullCount === totalTfs) {
+      vwapAlignmentLabel = `ALL ${totalTfs}/${totalTfs} ABOVE VWAP (BULLISH)`;
+      vwapAlignmentClass = 'bull';
+    } else if (vwapBearCount === totalTfs) {
+      vwapAlignmentLabel = `ALL ${totalTfs}/${totalTfs} BELOW VWAP (BEARISH)`;
+      vwapAlignmentClass = 'bear';
+    } else if (vwapBullCount >= totalTfs - 1) {
+      vwapAlignmentLabel = `${vwapBullCount}/${totalTfs} ABOVE VWAP (MOSTLY BULL)`;
+      vwapAlignmentClass = 'bull';
+    } else if (vwapBearCount >= totalTfs - 1) {
+      vwapAlignmentLabel = `${vwapBearCount}/${totalTfs} BELOW VWAP (MOSTLY BEAR)`;
+      vwapAlignmentClass = 'bear';
+    }
+
+    return {
+      action,
+      actionClass,
+      score: masterScore,
+      confidence: Math.min(99, Math.max(10, Math.abs(masterScore))),
+      vwapBullCount,
+      vwapBearCount,
+      vwapAlignmentLabel,
+      vwapAlignmentClass
+    };
+  }
+
   return {
     computeVWAP,
     computeVPVR,
@@ -307,6 +498,10 @@ window.Indicators = (function () {
     extractSwings,
     computeRSI,
     computeMACD,
-    detectDivergences
+    detectDivergences,
+    computeOBIProfile,
+    computeTrendFilter,
+    computeSmartDecision,
+    computeMasterMatrix
   };
 })();
