@@ -137,6 +137,7 @@
           <button class="toggle-chip active" data-layer="volDiv">VOL-PRICE DIV</button>
           <button class="toggle-chip active" data-layer="rsi">RSI + MA</button>
           <button class="toggle-chip active" data-layer="macd">MACD</button>
+          <button class="toggle-chip active" data-layer="macdCross">MACD SLOPE/CROSS</button>
           <button class="toggle-chip active" data-layer="crashDet">CRASH DETECTOR (4 TFs)</button>
           <button class="toggle-chip active" data-layer="burstDet">VOLUME BURST (4 TFs)</button>
         </div>
@@ -617,6 +618,27 @@
               <li><strong>Verdicts:</strong> <code>≥ +45</code> = <span class="txt-green">STRONG BUY</span> · <code>+18 to +44</code> = <span class="txt-green">BUY</span> · <code>-17 to +17</code> = <span class="txt-amber">WAIT</span> · <code>-18 to -44</code> = <span class="txt-red">SELL</span> · <code>≤ -45</code> = <span class="txt-red">STRONG SELL</span>.</li>
               <li><strong>Average Score Columns — AVG SCORE (5) &amp; AVG SCORE (14):</strong> Computes the rolling mean of the Smart Action Score across the <strong>last 5 candles</strong> (short-term momentum stability) and <strong>last 14 candles</strong> (sustained trend conviction) using live Binance historical candles for each timeframe.</li>
             </ul>
+            <h3 style="margin-top:16px;">6. MACD Early Crossover &amp; Dual-Slope Engine (Customizable)</h3>
+            <ul class="rule-list">
+              <li><span class="txt-cyan">● PRE▲ / PRE▼ (About to Cross):</span> Triggers before the actual crossover when <code>|MACD - Signal|</code> shrinks below the <strong>Gap Threshold</strong> and the MACD angle exceeds the <strong>Slope Sensitivity</strong>.</li>
+              <li><span class="txt-green">● X▲ / X▼ (Confirmed Cross):</span> Plots directly above the candle when the Histogram flips across <code>0.0</code>.</li>
+              <li><span class="txt-green">● ▲▲ / ▼▼ (Dual-Line Inclination):</span> Triggers when both MACD and Signal lines incline sharply together in the same direction (strong trend acceleration).</li>
+            </ul>
+            <div style="margin-top:10px; padding:10px; background:#09101c; border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; gap:8px;">
+              <div class="slider-inline" style="justify-content:space-between;">
+                <label for="macdGapThresh">EARLY CROSS GAP THRESHOLD (%):</label>
+                <input type="range" id="macdGapThresh" min="5" max="40" step="1" value="18" />
+                <span class="pct-pill" id="macdGapThreshVal">18%</span>
+              </div>
+              <div class="slider-inline" style="justify-content:space-between;">
+                <label for="macdSlopeThresh">SLOPE / ANGLE SENSITIVITY:</label>
+                <input type="range" id="macdSlopeThresh" min="0.5" max="4.0" step="0.1" value="1.2" />
+                <span class="pct-pill" id="macdSlopeThreshVal">1.2</span>
+              </div>
+              <div style="display:flex; justify-content:flex-end;">
+                <button class="btn-sm" id="btnResetMacdCfg">↻ RESET MACD THRESHOLDS</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
