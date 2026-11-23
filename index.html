@@ -200,10 +200,10 @@
         <div class="det-group-header">
           <div class="det-group-title">
             <span class="badge-tag crash-tag">CRASH DETECTOR · 4 INDIVIDUAL TFs</span>
-            <strong>LONG LIQUIDATION &amp; DROP CASCADE SUB-PANELS (1m · 3m · 5m · 15m)</strong>
+            <strong>LONG LIQUIDATION · BEARISH RSI/VOL DIVERGENCE · RSI &amp; MACD SUB-CHARTS (1m · 3m · 5m · 15m)</strong>
           </div>
           <div class="det-group-legend">
-            <span>Indicators: RSI · OBI · Vol Z-Score · Fib · Long Liq · 20/50/200 EMA · ATR/ATR% · OBV · BB · ADX · StdDev · HV%</span>
+            <span>Each TF: Score + Individual RSI(14)/MA + Bearish Div + MACD(12,26,9) + OBI · Vol Z · Fib · Long Liq · EMA · ATR% · OBV · BB · ADX · StdDev · HV%</span>
           </div>
         </div>
         <div class="detector-grid">
@@ -222,6 +222,20 @@
             <div class="det-canvas-wrap">
               <canvas class="det-canvas" id="crashCanvas_1m"></canvas>
             </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>RSI(14) · MA(14) · BEAR DIV</span>
+                <span id="crashRsiReadout_1m">RSI: -- | MA: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="crashRsiCanvas_1m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>MACD(12,26,9) · SIGNAL &amp; HIST</span>
+                <span id="crashMacdReadout_1m">MACD: -- | SIG: -- | HIST: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="crashMacdCanvas_1m"></canvas>
+            </div>
             <div class="det-telemetry" id="crashTele_1m"></div>
           </div>
           <div class="detector-panel" id="crashPanel_3m">
@@ -238,6 +252,20 @@
             </div>
             <div class="det-canvas-wrap">
               <canvas class="det-canvas" id="crashCanvas_3m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>RSI(14) · MA(14) · BEAR DIV</span>
+                <span id="crashRsiReadout_3m">RSI: -- | MA: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="crashRsiCanvas_3m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>MACD(12,26,9) · SIGNAL &amp; HIST</span>
+                <span id="crashMacdReadout_3m">MACD: -- | SIG: -- | HIST: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="crashMacdCanvas_3m"></canvas>
             </div>
             <div class="det-telemetry" id="crashTele_3m"></div>
           </div>
@@ -256,6 +284,20 @@
             <div class="det-canvas-wrap">
               <canvas class="det-canvas" id="crashCanvas_5m"></canvas>
             </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>RSI(14) · MA(14) · BEAR DIV</span>
+                <span id="crashRsiReadout_5m">RSI: -- | MA: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="crashRsiCanvas_5m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>MACD(12,26,9) · SIGNAL &amp; HIST</span>
+                <span id="crashMacdReadout_5m">MACD: -- | SIG: -- | HIST: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="crashMacdCanvas_5m"></canvas>
+            </div>
             <div class="det-telemetry" id="crashTele_5m"></div>
           </div>
           <div class="detector-panel" id="crashPanel_15m">
@@ -273,6 +315,20 @@
             <div class="det-canvas-wrap">
               <canvas class="det-canvas" id="crashCanvas_15m"></canvas>
             </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>RSI(14) · MA(14) · BEAR DIV</span>
+                <span id="crashRsiReadout_15m">RSI: -- | MA: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="crashRsiCanvas_15m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>MACD(12,26,9) · SIGNAL &amp; HIST</span>
+                <span id="crashMacdReadout_15m">MACD: -- | SIG: -- | HIST: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="crashMacdCanvas_15m"></canvas>
+            </div>
             <div class="det-telemetry" id="crashTele_15m"></div>
           </div>
         </div>
@@ -283,10 +339,10 @@
         <div class="det-group-header">
           <div class="det-group-title">
             <span class="badge-tag burst-tag">VOLUME BURST DETECTOR · 4 INDIVIDUAL TFs</span>
-            <strong>SHORT LIQUIDATION / SQUEEZE &amp; PUMP SUB-PANELS (1m · 3m · 5m · 15m)</strong>
+            <strong>SHORT SQUEEZE · BULLISH RSI/VOL DIVERGENCE · RSI &amp; MACD SUB-CHARTS (1m · 3m · 5m · 15m)</strong>
           </div>
           <div class="det-group-legend">
-            <span>Indicators: RSI · OBI · Vol Z-Score · Fib · Short Squeeze · 20/50/200 EMA · ATR/ATR% · OBV · BB · ADX · StdDev · HV%</span>
+            <span>Each TF: Score + Individual RSI(14)/MA + Bullish Div + MACD(12,26,9) + OBI · Vol Z · Fib · Short Sqz · EMA · ATR% · OBV · BB · ADX · StdDev · HV%</span>
           </div>
         </div>
         <div class="detector-grid">
@@ -305,6 +361,20 @@
             <div class="det-canvas-wrap">
               <canvas class="det-canvas" id="burstCanvas_1m"></canvas>
             </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>RSI(14) · MA(14) · BULL DIV</span>
+                <span id="burstRsiReadout_1m">RSI: -- | MA: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="burstRsiCanvas_1m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>MACD(12,26,9) · SIGNAL &amp; HIST</span>
+                <span id="burstMacdReadout_1m">MACD: -- | SIG: -- | HIST: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="burstMacdCanvas_1m"></canvas>
+            </div>
             <div class="det-telemetry" id="burstTele_1m"></div>
           </div>
           <div class="detector-panel" id="burstPanel_3m">
@@ -321,6 +391,20 @@
             </div>
             <div class="det-canvas-wrap">
               <canvas class="det-canvas" id="burstCanvas_3m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>RSI(14) · MA(14) · BULL DIV</span>
+                <span id="burstRsiReadout_3m">RSI: -- | MA: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="burstRsiCanvas_3m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>MACD(12,26,9) · SIGNAL &amp; HIST</span>
+                <span id="burstMacdReadout_3m">MACD: -- | SIG: -- | HIST: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="burstMacdCanvas_3m"></canvas>
             </div>
             <div class="det-telemetry" id="burstTele_3m"></div>
           </div>
@@ -339,6 +423,20 @@
             <div class="det-canvas-wrap">
               <canvas class="det-canvas" id="burstCanvas_5m"></canvas>
             </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>RSI(14) · MA(14) · BULL DIV</span>
+                <span id="burstRsiReadout_5m">RSI: -- | MA: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="burstRsiCanvas_5m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>MACD(12,26,9) · SIGNAL &amp; HIST</span>
+                <span id="burstMacdReadout_5m">MACD: -- | SIG: -- | HIST: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="burstMacdCanvas_5m"></canvas>
+            </div>
             <div class="det-telemetry" id="burstTele_5m"></div>
           </div>
           <div class="detector-panel" id="burstPanel_15m">
@@ -355,6 +453,20 @@
             </div>
             <div class="det-canvas-wrap">
               <canvas class="det-canvas" id="burstCanvas_15m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>RSI(14) · MA(14) · BULL DIV</span>
+                <span id="burstRsiReadout_15m">RSI: -- | MA: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="burstRsiCanvas_15m"></canvas>
+            </div>
+            <div class="det-mini-pane">
+              <div class="det-mini-head">
+                <span>MACD(12,26,9) · SIGNAL &amp; HIST</span>
+                <span id="burstMacdReadout_15m">MACD: -- | SIG: -- | HIST: --</span>
+              </div>
+              <canvas class="det-mini-canvas" id="burstMacdCanvas_15m"></canvas>
             </div>
             <div class="det-telemetry" id="burstTele_15m"></div>
           </div>
