@@ -16,7 +16,14 @@
     visibleCards: 24,
     pinnedUid: null,
     sonarOn: true,
-    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, emaSr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true, crashDet: true, burstDet: true },
+    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, emaSr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true, macdCross: true, crashDet: true, burstDet: true },
+    macdCfg: (function () {
+      try {
+        const saved = JSON.parse(localStorage.getItem('radar_v4_macd_cfg'));
+        if (saved && typeof saved.gapPct === 'number' && typeof saved.slopeMin === 'number') return saved;
+      } catch (_) {}
+      return { gapPct: 18, slopeMin: 1.2 };
+    })(),
     evaluations: { '1m': [], '5m': [], '15m': [], '4h': [] },
     decisions: {},
     inspectedObj: null
@@ -278,8 +285,12 @@
       emaSr: AppState.layers.emaSr && (!window.ConfluenceLab || window.ConfluenceLab.config.showDynamicMAOnChart)
     };
 
+    const macdSignals = window.Indicators.detectMacdSlopeSignals
+      ? window.Indicators.detectMacdSlopeSignals(candles, macdData, AppState.macdCfg)
+      : [];
+
     window.ChartRenderer.drawMainChart($('mainChartCanvas'), {
-      candles, vwap, vpvr, srLevels, activeMatch, layers: effectiveLayers, divergences, dynamicMA
+      candles, vwap, vpvr, srLevels, activeMatch, layers: effectiveLayers, divergences, dynamicMA, macdSignals
     });
 
     const rsiWrap = $('rsiPaneWrap');
@@ -321,6 +332,12 @@
       }
       if (latestVolDiv) {
         pills.push(`<span class="div-pill ${latestVolDiv.type === 'BULL' ? 'bull' : 'bear'}">⚡ ${latestVolDiv.label}</span>`);
+      }
+      const recentMacdSig = macdSignals.length ? macdSignals[macdSignals.length - 1] : null;
+      if (recentMacdSig && recentMacdSig.idx >= candles.length - 4) {
+        const sigCls = recentMacdSig.type === 'BULL' ? 'bull' : 'bear';
+        const kindTxt = recentMacdSig.kind === 'PRE' ? 'ABOUT TO CROSS' : (recentMacdSig.kind === 'CROSS' ? 'CONFIRMED CROSS' : 'DUAL SLOPE');
+        pills.push(`<span class="div-pill ${sigCls}">⚡ MACD ${recentMacdSig.label} (${kindTxt})</span>`);
       }
       if (!latestRsiDiv && !latestVolDiv) {
         pills.push('<span class="div-pill info">No Active Divergence on Current Window</span>');
@@ -670,6 +687,45 @@
         window.ChartRenderer.resetView(() => {
           if (AppState.activeTab === 'terminal') renderMainChartSection();
         });
+      });
+    }
+
+    // Formula Lab: Customizable MACD Early Crossover & Slope Thresholds
+    const saveMacdCfg = () => {
+      try { localStorage.setItem('radar_v4_macd_cfg', JSON.stringify(AppState.macdCfg)); } catch (_) {}
+    };
+    const gapSlider = $('macdGapThresh');
+    const slopeSlider = $('macdSlopeThresh');
+    if (gapSlider) {
+      gapSlider.value = AppState.macdCfg.gapPct;
+      if ($('macdGapThreshVal')) $('macdGapThreshVal').textContent = AppState.macdCfg.gapPct + '%';
+      gapSlider.addEventListener('input', e => {
+        AppState.macdCfg.gapPct = parseFloat(e.target.value);
+        if ($('macdGapThreshVal')) $('macdGapThreshVal').textContent = AppState.macdCfg.gapPct + '%';
+        saveMacdCfg();
+        renderMainChartSection();
+      });
+    }
+    if (slopeSlider) {
+      slopeSlider.value = AppState.macdCfg.slopeMin;
+      if ($('macdSlopeThreshVal')) $('macdSlopeThreshVal').textContent = AppState.macdCfg.slopeMin.toFixed(1);
+      slopeSlider.addEventListener('input', e => {
+        AppState.macdCfg.slopeMin = parseFloat(e.target.value);
+        if ($('macdSlopeThreshVal')) $('macdSlopeThreshVal').textContent = AppState.macdCfg.slopeMin.toFixed(1);
+        saveMacdCfg();
+        renderMainChartSection();
+      });
+    }
+    const resetMacdBtn = $('btnResetMacdCfg');
+    if (resetMacdBtn) {
+      resetMacdBtn.addEventListener('click', () => {
+        AppState.macdCfg = { gapPct: 18, slopeMin: 1.2 };
+        if (gapSlider) gapSlider.value = 18;
+        if ($('macdGapThreshVal')) $('macdGapThreshVal').textContent = '18%';
+        if (slopeSlider) slopeSlider.value = 1.2;
+        if ($('macdSlopeThreshVal')) $('macdSlopeThreshVal').textContent = '1.2';
+        saveMacdCfg();
+        renderMainChartSection();
       });
     }
 

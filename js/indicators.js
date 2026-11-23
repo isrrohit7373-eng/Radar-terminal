@@ -570,6 +570,74 @@ window.Indicators = (function () {
     };
   }
 
+
+  function detectMacdSlopeSignals(candles, macdData, cfg = {}) {
+    const signals = [];
+    if (!candles || !candles.length || !macdData || !macdData.macd) return signals;
+
+    const gapPct = cfg.gapPct != null ? cfg.gapPct : 18;        // % of recent max |hist| for "About to Cross"
+    const slopeMin = cfg.slopeMin != null ? cfg.slopeMin : 1.2; // Slope / Angle sensitivity
+    const { macd, signal, hist } = macdData;
+    const n = candles.length;
+
+    // Normalize against recent 50-bar max |hist| so thresholds adapt across 1m, 5m, 15m, 4h
+    const lookback = Math.min(50, n);
+    let maxHist = 1;
+    for (let i = n - lookback; i < n; i++) {
+      if (hist[i] != null && Math.abs(hist[i]) > maxHist) maxHist = Math.abs(hist[i]);
+    }
+    const gapLimit = maxHist * (gapPct / 100);
+    const slopeLimit = maxHist * (slopeMin / 100) * 8;
+
+    let lastSignalIdx = -3;
+    for (let i = 2; i < n; i++) {
+      const m0 = macd[i], m1 = macd[i - 1];
+      const s0 = signal[i], s1 = signal[i - 1];
+      const h0 = hist[i], h1 = hist[i - 1];
+      if (m0 == null || m1 == null || s0 == null || s1 == null || h0 == null || h1 == null) continue;
+
+      const macdSlope = m0 - m1;
+      const sigSlope = s0 - s1;
+      const narrowing = Math.abs(h0) < Math.abs(h1);
+
+      // 1. Confirmed Crossover
+      if (h1 <= 0 && h0 > 0) {
+        signals.push({ idx: i, type: 'BULL', kind: 'CROSS', label: 'X▲', price: candles[i].high });
+        lastSignalIdx = i;
+        continue;
+      }
+      if (h1 >= 0 && h0 < 0) {
+        signals.push({ idx: i, type: 'BEAR', kind: 'CROSS', label: 'X▼', price: candles[i].high });
+        lastSignalIdx = i;
+        continue;
+      }
+
+      if (i - lastSignalIdx < 2) continue;
+
+      // 2. Early Crossover ("About to Happen" via narrowing gap + steep angle)
+      if (h0 < 0 && narrowing && Math.abs(h0) <= gapLimit && macdSlope > slopeLimit) {
+        signals.push({ idx: i, type: 'BULL', kind: 'PRE', label: 'PRE▲', price: candles[i].high });
+        lastSignalIdx = i;
+        continue;
+      }
+      if (h0 > 0 && narrowing && Math.abs(h0) <= gapLimit && macdSlope < -slopeLimit) {
+        signals.push({ idx: i, type: 'BEAR', kind: 'PRE', label: 'PRE▼', price: candles[i].high });
+        lastSignalIdx = i;
+        continue;
+      }
+
+      // 3. Dual-Line Sharp Inclination (Both MACD & Signal inclining together)
+      if (macdSlope > slopeLimit * 1.35 && sigSlope > slopeLimit * 0.65 && h0 > 0) {
+        signals.push({ idx: i, type: 'BULL', kind: 'SLOPE', label: '▲▲', price: candles[i].high });
+        lastSignalIdx = i;
+      } else if (macdSlope < -slopeLimit * 1.35 && sigSlope < -slopeLimit * 0.65 && h0 < 0) {
+        signals.push({ idx: i, type: 'BEAR', kind: 'SLOPE', label: '▼▼', price: candles[i].high });
+        lastSignalIdx = i;
+      }
+    }
+    return signals;
+  }
+
   return {
     computeVWAP,
     computeVPVR,
@@ -577,6 +645,7 @@ window.Indicators = (function () {
     extractSwings,
     computeRSI,
     computeMACD,
+    detectMacdSlopeSignals,
     detectDivergences,
     computeOBIProfile,
     computeTrendFilter,

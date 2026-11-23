@@ -627,6 +627,37 @@ window.ChartRenderer = (function () {
       if (layers.volDiv && opts.divergences.volDivs) drawDivSet(opts.divergences.volDivs, true);
     }
 
+
+    // 7C. MACD EARLY CROSSOVER & DUAL-SLOPE POINTS (DIRECTLY ABOVE CANDLES)
+    if (layers.macdCross && opts.macdSignals && opts.macdSignals.length) {
+      opts.macdSignals.forEach(sig => {
+        if (sig.idx < startIdx || sig.idx >= endIdx) return;
+        const x = xOfGlobal(sig.idx);
+        const y = Math.max(padT + 14, yOf(sig.price) - 10);
+        const isBull = sig.type === 'BULL';
+        const col = sig.kind === 'PRE'
+          ? (isBull ? '#22d3ee' : '#f59e0b')
+          : (isBull ? '#00e676' : '#ff4757');
+
+        ctx.save();
+        // Glowing point above candle
+        ctx.beginPath();
+        ctx.arc(x, y, sig.kind === 'CROSS' ? 4.2 : 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = col;
+        ctx.fill();
+        ctx.strokeStyle = '#060a11';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Compact tag above point
+        ctx.font = 'bold 8.5px monospace';
+        ctx.fillStyle = col;
+        ctx.textAlign = 'center';
+        ctx.fillText(sig.label, x, y - 6);
+        ctx.restore();
+      });
+    }
+
     // 8. Live Current Price Line & Tag on Right Axis
     const lastPrice = vis[vis.length - 1].close;
     const yNow = yOf(lastPrice);
