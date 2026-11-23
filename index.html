@@ -83,6 +83,7 @@
           </div>
           <div class="matrix-master-group">
             <span class="vwap-align-pill neutral" id="masterVwapAlign">VWAP ALIGN: SCANNING...</span>
+            <span class="master-avg-pill" id="masterAvgPill">AVG(5): -- · AVG(14): --</span>
             <span class="decision-pill wait" id="masterDecisionPill">MASTER: WAIT</span>
           </div>
         </div>
@@ -97,7 +98,9 @@
                 <th>VWAP &amp; TREND</th>
                 <th>RSI &amp; MACD</th>
                 <th>PATTERNS (STRENGTH)</th>
-                <th>SCORE</th>
+                <th>SCORE (INST)</th>
+                <th>AVG SCORE (5)</th>
+                <th>AVG SCORE (14)</th>
               </tr>
             </thead>
             <tbody id="smartMatrixBody">
@@ -321,6 +324,7 @@
               <li><strong>Multi-TF VWAP Alignment:</strong> Confirms whether price is above/below VWAP and aligned with EMA(20) vs EMA(50) across 1m, 5m, 15m, and 4h.</li>
               <li><strong>Smart Action Matrix Score (-100 to +100):</strong> Equally blends 4 pillars (25 pts each): <strong>OBI Pressure</strong> (70% 5-Avg + 30% Instant), <strong>VWAP &amp; EMA Trend</strong>, <strong>RSI/MACD Momentum + Divergence</strong>, and <strong>Qualified Pattern Count × Avg Match Strength</strong>.</li>
               <li><strong>Verdicts:</strong> <code>≥ +45</code> = <span class="txt-green">STRONG BUY</span> · <code>+18 to +44</code> = <span class="txt-green">BUY</span> · <code>-17 to +17</code> = <span class="txt-amber">WAIT</span> · <code>-18 to -44</code> = <span class="txt-red">SELL</span> · <code>≤ -45</code> = <span class="txt-red">STRONG SELL</span>.</li>
+              <li><strong>Average Score Columns — AVG SCORE (5) &amp; AVG SCORE (14):</strong> Computes the rolling mean of the Smart Action Score across the <strong>last 5 candles</strong> (short-term momentum stability) and <strong>last 14 candles</strong> (sustained trend conviction) using live Binance historical candles for each timeframe.</li>
             </ul>
           </div>
         </div>
