@@ -16,7 +16,7 @@
     visibleCards: 24,
     pinnedUid: null,
     sonarOn: true,
-    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true },
+    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, emaSr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true },
     evaluations: { '1m': [], '5m': [], '15m': [], '4h': [] },
     decisions: {},
     inspectedObj: null
@@ -50,6 +50,14 @@
       });
     });
     AppState.decisions = nextDecisions;
+    if (window.ConfluenceLab) {
+      window.ConfluenceLab.evaluateAll({
+        candlesByTf: st.candles,
+        evaluationsByTf: AppState.evaluations,
+        decisionsByTf: AppState.decisions,
+        minMatch: AppState.dashMinMatch
+      });
+    }
   }
 
   function fmtSignedPct(val) {
@@ -63,6 +71,10 @@
         const found = AppState.evaluations[tf].find(e => e.uid === AppState.pinnedUid);
         if (found) return found;
       }
+    }
+    if (window.ConfluenceLab) {
+      const labBest = window.ConfluenceLab.getBestPatternForChart(AppState.activeTf);
+      if (labBest) return labBest;
     }
     const list = AppState.evaluations[AppState.activeTf] || [];
     return list.find(e => !e.hasRed && e.overallPct >= AppState.dashMinMatch) || list[0] || null;
@@ -260,8 +272,14 @@
     const macdData = window.Indicators.computeMACD(candles, 12, 26, 9);
     const divergences = window.Indicators.detectDivergences(candles, rsiData.rsi);
 
+    const dynamicMA = window.ConfluenceLab ? window.ConfluenceLab.getDynamicMA(AppState.activeTf) : null;
+    const effectiveLayers = {
+      ...AppState.layers,
+      emaSr: AppState.layers.emaSr && (!window.ConfluenceLab || window.ConfluenceLab.config.showDynamicMAOnChart)
+    };
+
     window.ChartRenderer.drawMainChart($('mainChartCanvas'), {
-      candles, vwap, vpvr, srLevels, activeMatch, layers: AppState.layers, divergences
+      candles, vwap, vpvr, srLevels, activeMatch, layers: effectiveLayers, divergences, dynamicMA
     });
 
     const rsiWrap = $('rsiPaneWrap');
@@ -318,7 +336,10 @@
       const dirSym = isBear ? '▼' : '▲';
       const cls = isBear ? 'txt-red' : 'txt-green';
 
-      $('apName').innerHTML = `<strong>#${p.id} ${p.name}</strong> <span class="bias-badge ${p.bias}">${p.bias}</span> <span class="tf-mini">${activeMatch.tf}</span>`;
+      const confBadge = activeMatch.confluenceMeta
+        ? ` <span class="decision-pill sm ${activeMatch.confluenceMeta.verdict.cls}">LAB ${activeMatch.confluenceMeta.confluencePct}%</span>`
+        : '';
+      $('apName').innerHTML = `<strong>#${p.id} ${p.name}</strong> <span class="bias-badge ${p.bias}">${p.bias}</span> <span class="tf-mini">${activeMatch.tf}</span>${confBadge}`;
       $('apFibSummary').innerHTML = `
         <span class="ap-fib-chip">Entry: <strong>${fmt(t.entry)}</strong></span>
         <span class="ap-fib-chip ${cls}">${dirSym} TP1: <strong>${fmt(t.tp1)}</strong> (${t.tp1Pct}%)</span>
@@ -454,12 +475,23 @@
     renderAll();
   }
 
+  function renderConfluenceLab() {
+    if (!window.ConfluenceLab) return;
+    window.ConfluenceLab.renderLabTab($('tab-confluence'), {
+      activeTf: AppState.activeTf,
+      onPin: ev => pinPatternToChart(ev),
+      onInspect: ev => openInspectModal(ev),
+      onSwitchTf: tf => switchTimeframe(tf)
+    });
+  }
+
   function switchTab(tabName) {
     AppState.activeTab = tabName;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tabName));
     if (tabName === 'terminal') renderMainChartSection();
     if (tabName === 'library') renderPatternLibrary();
+    if (tabName === 'confluence') renderConfluenceLab();
   }
 
   function syncTfButtons() {
@@ -481,6 +513,7 @@
     renderSmartActionMatrix();
     if (AppState.activeTab === 'terminal') renderMainChartSection();
     if (AppState.activeTab === 'library') renderPatternLibrary();
+    if (AppState.activeTab === 'confluence') renderConfluenceLab();
   }
 
   async function refreshCycle() {
@@ -617,6 +650,9 @@
   }
 
   // Boot
+  if (window.ConfluenceLab) {
+    window.ConfluenceLab.onConfigChange(() => renderAll());
+  }
   bindEvents();
   refreshCycle();
   setInterval(() => {

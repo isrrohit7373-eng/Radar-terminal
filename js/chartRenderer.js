@@ -197,6 +197,40 @@ window.ChartRenderer = (function () {
       ctx.restore();
     }
 
+    // 5B. DYNAMIC MOVING AVERAGE S/R OVERLAY (from Confluence Lab)
+    if (layers.emaSr && opts.dynamicMA && opts.dynamicMA.fastSeries && opts.dynamicMA.fastSeries.length) {
+      const drawEmaLine = (series, color, dash, labelTxt) => {
+        const sub = series.slice(startIdx);
+        if (!sub.length) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.35;
+        if (dash) ctx.setLineDash(dash);
+        ctx.beginPath();
+        let started = false;
+        let lastX = 0, lastY = 0;
+        sub.forEach((v, i) => {
+          if (v === null || v === undefined) return;
+          const x = xOfVis(i);
+          const y = yOf(v);
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else ctx.lineTo(x, y);
+          lastX = x; lastY = y;
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (started && labelTxt) {
+          ctx.fillStyle = color;
+          ctx.font = 'bold 9px monospace';
+          ctx.fillText(labelTxt, Math.min(W - padR - 42, lastX + 4), lastY + 3);
+        }
+        ctx.restore();
+      };
+      drawEmaLine(opts.dynamicMA.fastSeries, '#38bdf8', null, `E${opts.dynamicMA.fastPeriod}`);
+      drawEmaLine(opts.dynamicMA.slowSeries, '#c084fc', [4, 3], `E${opts.dynamicMA.slowPeriod}`);
+      drawEmaLine(opts.dynamicMA.trendSeries, 'rgba(248, 250, 252, 0.45)', [2, 4], `E${opts.dynamicMA.trendPeriod}`);
+    }
+
     // 6. 123 GEO PATTERN OVERLAY
     if (layers.geo && activeMatch && activeMatch.dots.length) {
       ctx.save();
