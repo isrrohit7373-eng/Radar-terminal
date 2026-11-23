@@ -73,6 +73,40 @@
         </div>
       </section>
 
+
+      <!-- SMART ACTION MATRIX (MULTI-TIMEFRAME CONFLUENCE DECISION ENGINE) -->
+      <section class="card matrix-card" id="smartMatrixCard">
+        <div class="matrix-header">
+          <div class="matrix-title-group">
+            <span class="badge-tag">SMART ACTION MATRIX</span>
+            <strong>ZERO-CONFUSION DECISION ENGINE (OBI · VWAP · RSI/MACD · PATTERNS)</strong>
+          </div>
+          <div class="matrix-master-group">
+            <span class="vwap-align-pill neutral" id="masterVwapAlign">VWAP ALIGN: SCANNING...</span>
+            <span class="decision-pill wait" id="masterDecisionPill">MASTER: WAIT</span>
+          </div>
+        </div>
+        <div class="matrix-table-wrap">
+          <table class="matrix-table">
+            <thead>
+              <tr>
+                <th>TF</th>
+                <th>DECISION</th>
+                <th>OBI (INST / 5-AVG)</th>
+                <th>POS / NEG AVG</th>
+                <th>VWAP &amp; TREND</th>
+                <th>RSI &amp; MACD</th>
+                <th>PATTERNS (STRENGTH)</th>
+                <th>SCORE</th>
+              </tr>
+            </thead>
+            <tbody id="smartMatrixBody">
+              <!-- Populated dynamically by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- MAIN CANDLESTICK CHART CARD -->
       <section class="card chart-card">
         <div class="chart-header">
@@ -279,6 +313,14 @@
               <li><span class="txt-green">● Bullish RSI Divergence:</span> Price makes a <strong>Lower Low</strong> while RSI makes a <strong>Higher Low</strong> (plotted on Main Chart &amp; RSI Pane).</li>
               <li><span class="txt-red">● Bearish RSI Divergence:</span> Price makes a <strong>Higher High</strong> while RSI makes a <strong>Lower High</strong>.</li>
               <li><span class="txt-cyan">● Volume-Price Divergence:</span> Price makes a new swing high/low on <strong>declining volume</strong>, signaling trend exhaustion and potential reversal.</li>
+            </ul>
+
+            <h3 style="margin-top:16px;">5. OBI 5-Period Smoothing, VWAP Filter &amp; Smart Action Matrix</h3>
+            <ul class="rule-list">
+              <li><strong>OBI (5-Period Smoothed):</strong> Calculates per-candle Order Book / Order-Flow Imbalance <code>((Buy - Sell) / (Buy + Sell)) × 100</code> across the last 5 candles for each timeframe, plus separate Positive and Negative burst averages.</li>
+              <li><strong>Multi-TF VWAP Alignment:</strong> Confirms whether price is above/below VWAP and aligned with EMA(20) vs EMA(50) across 1m, 5m, 15m, and 4h.</li>
+              <li><strong>Smart Action Matrix Score (-100 to +100):</strong> Equally blends 4 pillars (25 pts each): <strong>OBI Pressure</strong> (70% 5-Avg + 30% Instant), <strong>VWAP &amp; EMA Trend</strong>, <strong>RSI/MACD Momentum + Divergence</strong>, and <strong>Qualified Pattern Count × Avg Match Strength</strong>.</li>
+              <li><strong>Verdicts:</strong> <code>≥ +45</code> = <span class="txt-green">STRONG BUY</span> · <code>+18 to +44</code> = <span class="txt-green">BUY</span> · <code>-17 to +17</code> = <span class="txt-amber">WAIT</span> · <code>-18 to -44</code> = <span class="txt-red">SELL</span> · <code>≤ -45</code> = <span class="txt-red">STRONG SELL</span>.</li>
             </ul>
           </div>
         </div>
