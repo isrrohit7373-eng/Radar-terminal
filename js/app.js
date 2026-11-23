@@ -16,7 +16,7 @@
     visibleCards: 24,
     pinnedUid: null,
     sonarOn: true,
-    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, emaSr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true },
+    layers: { vpvr: true, vwap: true, delta: true, obi: true, sr: true, emaSr: true, geo: true, fib: true, rsiDiv: true, volDiv: true, rsi: true, macd: true, crashDet: true, burstDet: true },
     evaluations: { '1m': [], '5m': [], '15m': [], '4h': [] },
     decisions: {},
     inspectedObj: null
@@ -349,6 +349,17 @@
       $('apScore').textContent = `${activeMatch.greenCount}/${activeMatch.totalDots} PASS · ${activeMatch.overallPct}%`;
       $('btnUnpin').style.display = AppState.pinnedUid ? 'inline-block' : 'none';
     }
+
+    // Update Dedicated 8 Individual Sub-Panels (4 Crash + 4 Volume Burst)
+    if (window.CrashBurstDetectors) {
+      window.CrashBurstDetectors.updateAndRender({
+        candlesByTf: window.DataEngine.state.candles,
+        liveObi: obi,
+        mode: window.DataEngine.state.mode,
+        showCrash: AppState.layers.crashDet,
+        showBurst: AppState.layers.burstDet
+      });
+    }
   }
 
   function getFilteredLibraryList() {
@@ -502,6 +513,9 @@
 
   function switchTimeframe(tf) {
     AppState.activeTf = tf;
+    if (window.ChartRenderer && window.ChartRenderer.resetView) {
+      window.ChartRenderer.resetView();
+    }
     syncTfButtons();
     renderAll();
   }
@@ -643,6 +657,21 @@
     $('inspectModal').addEventListener('click', e => {
       if (e.target.id === 'inspectModal') closeInspectModal();
     });
+
+    // Smooth iPad Pinch-to-Zoom, Pan & Double-Tap Reset on Main Chart
+    if (window.ChartRenderer && window.ChartRenderer.bindZoomPan) {
+      window.ChartRenderer.bindZoomPan($('mainChartCanvas'), () => {
+        if (AppState.activeTab === 'terminal') renderMainChartSection();
+      });
+    }
+    const resetZoomBtn = $('btnResetZoom');
+    if (resetZoomBtn && window.ChartRenderer && window.ChartRenderer.resetView) {
+      resetZoomBtn.addEventListener('click', () => {
+        window.ChartRenderer.resetView(() => {
+          if (AppState.activeTab === 'terminal') renderMainChartSection();
+        });
+      });
+    }
 
     window.addEventListener('resize', () => {
       if (AppState.activeTab === 'terminal') renderMainChartSection();

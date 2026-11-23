@@ -8,6 +8,240 @@
  */
 window.ChartRenderer = (function () {
 
+  // Smooth Zoom & Pan viewport state for Main Chart (synced with RSI & MACD panes)
+  const viewState = {
+    visibleCount: 72,
+    rightOffset: 0,
+    minVisible: 20,
+    maxVisible: 200,
+    defaultVisible: 72,
+    lastTotalCandles: 72
+  };
+
+  function getViewWindow(totalCandles) {
+    const n = totalCandles || 0;
+    viewState.lastTotalCandles = n;
+    if (!n) return { visibleCount: 0, startIdx: 0, endIdx: 0, rightOffset: 0 };
+    const minV = Math.min(viewState.minVisible, n);
+    const maxV = Math.min(viewState.maxVisible, n);
+    const visCount = Math.max(minV, Math.min(maxV, Math.round(viewState.visibleCount)));
+    const maxOffset = Math.max(0, n - visCount);
+    const rOff = Math.max(0, Math.min(maxOffset, Math.round(viewState.rightOffset)));
+    viewState.rightOffset = rOff;
+    const endIdx = n - rOff;
+    const startIdx = Math.max(0, endIdx - visCount);
+    return { visibleCount: endIdx - startIdx, startIdx, endIdx, rightOffset: rOff };
+  }
+
+  function updateZoomHud() {
+    const statusEl = document.getElementById('chartZoomStatus');
+    const resetEl = document.getElementById('btnResetZoom');
+    const isDefault = Math.round(viewState.visibleCount) === viewState.defaultVisible && Math.round(viewState.rightOffset) === 0;
+    if (statusEl) {
+      const bars = Math.round(Math.min(viewState.lastTotalCandles || viewState.visibleCount, viewState.visibleCount));
+      const panTxt = Math.round(viewState.rightOffset) > 0 ? `-${Math.round(viewState.rightOffset)} BARS` : 'LIVE';
+      statusEl.textContent = `${bars} BARS · ${panTxt}`;
+    }
+    if (resetEl) {
+      resetEl.style.display = isDefault ? 'none' : 'inline-block';
+    }
+  }
+
+  function resetView(onUpdate) {
+    viewState.visibleCount = viewState.defaultVisible;
+    viewState.rightOffset = 0;
+    updateZoomHud();
+    if (typeof onUpdate === 'function') onUpdate();
+  }
+
+  function bindZoomPan(canvas, onUpdate) {
+    if (!canvas || canvas.dataset.zoomPanBound === '1') return;
+    canvas.dataset.zoomPanBound = '1';
+
+    let rafId = null;
+    const scheduleRedraw = () => {
+      updateZoomHud();
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (typeof onUpdate === 'function') onUpdate();
+      });
+    };
+
+    // Inertia animation for smooth iPad touch swipe
+    let inertiaId = null;
+    const stopInertia = () => {
+      if (inertiaId) {
+        cancelAnimationFrame(inertiaId);
+        inertiaId = null;
+      }
+    };
+
+    const clampViewport = () => {
+      const n = Math.max(viewState.minVisible, viewState.lastTotalCandles || 72);
+      const minV = Math.min(viewState.minVisible, n);
+      const maxV = Math.min(viewState.maxVisible, n);
+      viewState.visibleCount = Math.max(minV, Math.min(maxV, viewState.visibleCount));
+      const maxOff = Math.max(0, n - Math.round(viewState.visibleCount));
+      viewState.rightOffset = Math.max(0, Math.min(maxOff, viewState.rightOffset));
+    };
+
+    const getPxPerBar = () => {
+      const rect = canvas.getBoundingClientRect();
+      const plotW = Math.max(120, rect.width - 108);
+      const slots = viewState.visibleCount + (viewState.rightOffset === 0 ? 18 : 2);
+      return plotW / Math.max(10, slots);
+    };
+
+    // --- TOUCH (iPad Pinch-to-Zoom + 1-Finger Pan + Double-Tap Reset) ---
+    let touchMode = null; // 'pan' | 'pinch'
+    let startX = 0;
+    let startRightOffset = 0;
+    let lastX = 0;
+    let lastTime = 0;
+    let velocityBarsPerFrame = 0;
+    let pinchStartDist = 0;
+    let pinchStartVis = 72;
+    let pinchStartOffset = 0;
+    let lastTapTime = 0;
+
+    const getTouchDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+    canvas.addEventListener('touchstart', e => {
+      stopInertia();
+      if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - lastTapTime < 280) {
+          e.preventDefault();
+          lastTapTime = 0;
+          resetView(onUpdate);
+          return;
+        }
+        lastTapTime = now;
+        touchMode = 'pan';
+        startX = e.touches[0].clientX;
+        lastX = startX;
+        lastTime = performance.now();
+        velocityBarsPerFrame = 0;
+        startRightOffset = viewState.rightOffset;
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        touchMode = 'pinch';
+        pinchStartDist = Math.max(10, getTouchDist(e.touches[0], e.touches[1]));
+        pinchStartVis = viewState.visibleCount;
+        pinchStartOffset = viewState.rightOffset;
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      if (touchMode === 'pan' && e.touches.length === 1) {
+        e.preventDefault();
+        const curX = e.touches[0].clientX;
+        const now = performance.now();
+        const dx = curX - startX;
+        const pxPerBar = getPxPerBar();
+        const deltaBars = dx / Math.max(2, pxPerBar);
+        viewState.rightOffset = startRightOffset + deltaBars;
+        clampViewport();
+
+        const dt = Math.max(4, now - lastTime);
+        const stepBars = (curX - lastX) / Math.max(2, pxPerBar);
+        velocityBarsPerFrame = (stepBars / dt) * 16;
+        lastX = curX;
+        lastTime = now;
+        scheduleRedraw();
+      } else if (touchMode === 'pinch' && e.touches.length === 2) {
+        e.preventDefault();
+        const curDist = Math.max(10, getTouchDist(e.touches[0], e.touches[1]));
+        const scale = pinchStartDist / curDist; // pinch out -> fewer bars (zoom in)
+        const nextVis = pinchStartVis * scale;
+        const deltaVis = nextVis - pinchStartVis;
+        viewState.visibleCount = nextVis;
+        // Keep center anchor balanced while zooming
+        viewState.rightOffset = Math.max(0, pinchStartOffset - deltaVis * 0.35);
+        clampViewport();
+        scheduleRedraw();
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', e => {
+      if (e.touches.length === 0) {
+        if (touchMode === 'pan' && Math.abs(velocityBarsPerFrame) > 0.15) {
+          let v = Math.max(-8, Math.min(8, velocityBarsPerFrame));
+          const step = () => {
+            v *= 0.90;
+            if (Math.abs(v) < 0.05) {
+              inertiaId = null;
+              return;
+            }
+            viewState.rightOffset += v;
+            clampViewport();
+            scheduleRedraw();
+            inertiaId = requestAnimationFrame(step);
+          };
+          inertiaId = requestAnimationFrame(step);
+        }
+        touchMode = null;
+      } else if (e.touches.length === 1) {
+        // Transition smoothly from pinch back to 1-finger pan
+        touchMode = 'pan';
+        startX = e.touches[0].clientX;
+        lastX = startX;
+        startRightOffset = viewState.rightOffset;
+        velocityBarsPerFrame = 0;
+      }
+    }, { passive: true });
+
+    // --- DESKTOP MOUSE WHEEL / TRACKPAD PINCH ZOOM ---
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      stopInertia();
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && !e.ctrlKey) {
+        // Horizontal two-finger trackpad scroll -> pan
+        const pxPerBar = getPxPerBar();
+        viewState.rightOffset -= (e.deltaX / Math.max(2, pxPerBar)) * 0.6;
+      } else {
+        const factor = e.deltaY > 0 ? 1.12 : 0.89;
+        viewState.visibleCount *= factor;
+      }
+      clampViewport();
+      scheduleRedraw();
+    }, { passive: false });
+
+    // --- DESKTOP MOUSE DRAG PAN ---
+    let dragging = false;
+    let dragStartX = 0;
+    let dragStartOff = 0;
+
+    canvas.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      stopInertia();
+      dragging = true;
+      dragStartX = e.clientX;
+      dragStartOff = viewState.rightOffset;
+      canvas.classList.add('is-dragging');
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const dx = e.clientX - dragStartX;
+      const pxPerBar = getPxPerBar();
+      viewState.rightOffset = dragStartOff + dx / Math.max(2, pxPerBar);
+      clampViewport();
+      scheduleRedraw();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      canvas.classList.remove('is-dragging');
+    });
+
+    canvas.addEventListener('dblclick', () => resetView(onUpdate));
+    updateZoomHud();
+  }
+
+
   function fmtPrice(p) {
     return '$' + Number(p).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
@@ -58,12 +292,14 @@ window.ChartRenderer = (function () {
     const padR = 96;   // Right price axis
     const padT = 20;
     const padB = 26;
-    const forecastSlots = 18; // Extra horizontal space on right for Fib Target Zone & Arrow
-
-    const visibleCount = Math.min(72, candles.length);
-    const startIdx = candles.length - visibleCount;
-    const vis = candles.slice(startIdx);
-    const vwapVis = vwap && vwap.series ? vwap.series.slice(startIdx) : [];
+    const vw = getViewWindow(candles.length);
+    const visibleCount = vw.visibleCount;
+    const startIdx = vw.startIdx;
+    const endIdx = vw.endIdx;
+    const forecastSlots = vw.rightOffset === 0 ? 18 : 2; // Extra space on right when live
+    const vis = candles.slice(startIdx, endIdx);
+    const vwapVis = vwap && vwap.series ? vwap.series.slice(startIdx, endIdx) : [];
+    updateZoomHud();
 
     // Compute Y price bounds including Fib Targets if active
     let minP = Infinity, maxP = -Infinity;
@@ -72,7 +308,7 @@ window.ChartRenderer = (function () {
       if (c.high > maxP) maxP = c.high;
     });
 
-    if (layers.fib && activeMatch && activeMatch.targets) {
+    if (layers.fib && activeMatch && activeMatch.targets && vw.rightOffset === 0) {
       const t = activeMatch.targets;
       minP = Math.min(minP, t.tp1, t.tp2, t.sl);
       maxP = Math.max(maxP, t.tp1, t.tp2, t.sl);
@@ -200,7 +436,7 @@ window.ChartRenderer = (function () {
     // 5B. DYNAMIC MOVING AVERAGE S/R OVERLAY (from Confluence Lab)
     if (layers.emaSr && opts.dynamicMA && opts.dynamicMA.fastSeries && opts.dynamicMA.fastSeries.length) {
       const drawEmaLine = (series, color, dash, labelTxt) => {
-        const sub = series.slice(startIdx);
+        const sub = series.slice(startIdx, endIdx);
         if (!sub.length) return;
         ctx.save();
         ctx.strokeStyle = color;
@@ -274,7 +510,7 @@ window.ChartRenderer = (function () {
     }
 
     // 7. LIVE FIBONACCI TARGET ZONE (RED AREA + RED DOWN ARROW / GREEN AREA + GREEN UP ARROW)
-    if (layers.fib && activeMatch && activeMatch.targets) {
+    if (layers.fib && activeMatch && activeMatch.targets && vw.rightOffset === 0) {
       const t = activeMatch.targets;
       const isBear = activeMatch.pattern.bias === 'BEARISH';
       const mainColor = isBear ? '#ff4757' : '#00e676';
@@ -561,9 +797,11 @@ window.ChartRenderer = (function () {
     ctx.fillRect(0, 0, W, H);
 
     const padL = 12, padR = 96, padT = 12, padB = 14;
-    const forecastSlots = 18;
-    const visibleCount = Math.min(72, candles.length);
-    const startIdx = candles.length - visibleCount;
+    const vw = getViewWindow(candles.length);
+    const visibleCount = vw.visibleCount;
+    const startIdx = vw.startIdx;
+    const endIdx = vw.endIdx;
+    const forecastSlots = vw.rightOffset === 0 ? 18 : 2;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     const stepX = plotW / (visibleCount + forecastSlots);
@@ -589,8 +827,8 @@ window.ChartRenderer = (function () {
       ctx.fillText(String(lvl), W - padR + 8, y + 3);
     });
 
-    const rsiVis = rsiData.rsi.slice(startIdx);
-    const maVis = rsiData.rsiMA.slice(startIdx);
+    const rsiVis = rsiData.rsi.slice(startIdx, endIdx);
+    const maVis = rsiData.rsiMA.slice(startIdx, endIdx);
 
     ctx.save();
     ctx.strokeStyle = '#f59e0b';
@@ -673,16 +911,18 @@ window.ChartRenderer = (function () {
     ctx.fillRect(0, 0, W, H);
 
     const padL = 12, padR = 96, padT = 12, padB = 14;
-    const forecastSlots = 18;
-    const visibleCount = Math.min(72, candles.length);
-    const startIdx = candles.length - visibleCount;
+    const vw = getViewWindow(candles.length);
+    const visibleCount = vw.visibleCount;
+    const startIdx = vw.startIdx;
+    const endIdx = vw.endIdx;
+    const forecastSlots = vw.rightOffset === 0 ? 18 : 2;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     const stepX = plotW / (visibleCount + forecastSlots);
 
-    const mVis = macdData.macd.slice(startIdx);
-    const sVis = macdData.signal.slice(startIdx);
-    const hVis = macdData.hist.slice(startIdx);
+    const mVis = macdData.macd.slice(startIdx, endIdx);
+    const sVis = macdData.signal.slice(startIdx, endIdx);
+    const hVis = macdData.hist.slice(startIdx, endIdx);
 
     let maxAbs = 1;
     [...mVis, ...sVis, ...hVis].forEach(v => {
@@ -749,6 +989,8 @@ window.ChartRenderer = (function () {
     drawMacdPane,
     drawMiniPattern,
     drawModalPattern,
+    bindZoomPan,
+    resetView,
     fmtPrice
   };
 })();
