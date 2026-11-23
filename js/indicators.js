@@ -355,10 +355,22 @@ window.Indicators = (function () {
     return { vwap, priceAboveVwap, vwapDiffPct, emaFast, emaSlow, emaBull, trend, aligned };
   }
 
+  function classifyScoreAction(score, strongThresh = 45, mildThresh = 18) {
+    if (score >= strongThresh) return { action: 'STRONG BUY', actionClass: 'strong-buy' };
+    if (score >= mildThresh) return { action: 'BUY', actionClass: 'buy' };
+    if (score <= -strongThresh) return { action: 'STRONG SELL', actionClass: 'strong-sell' };
+    if (score <= -mildThresh) return { action: 'SELL', actionClass: 'sell' };
+    return { action: 'WAIT', actionClass: 'wait' };
+  }
+
   function computeSmartDecision({ tf, candles, evaluations = [], minMatch = 25, liveObi = null }) {
     const obi = computeOBIProfile(candles, 5);
     const effectiveInstant = (liveObi !== null && !Number.isNaN(Number(liveObi))) ? +Number(liveObi).toFixed(1) : obi.instant;
     const trend = computeTrendFilter(candles);
+    const vwapObj = computeVWAP(candles || []);
+    const closes = (candles || []).map(c => c.close);
+    const ema20Arr = computeEMA(closes, 20);
+    const ema50Arr = computeEMA(closes, 50);
     const rsiData = computeRSI(candles, 14, 14);
     const macdData = computeMACD(candles, 12, 26, 9);
     const divs = detectDivergences(candles, rsiData.rsi);
@@ -401,19 +413,78 @@ window.Indicators = (function () {
 
     const totalScore = Math.round(obiScore + trendScore + momScore + patScore);
     const confidence = Math.min(99, Math.max(10, Math.abs(totalScore)));
+    const { action, actionClass } = classifyScoreAction(totalScore, 45, 18);
 
-    let action = 'WAIT';
-    let actionClass = 'wait';
-    if (totalScore >= 45) { action = 'STRONG BUY'; actionClass = 'strong-buy'; }
-    else if (totalScore >= 18) { action = 'BUY'; actionClass = 'buy'; }
-    else if (totalScore <= -45) { action = 'STRONG SELL'; actionClass = 'strong-sell'; }
-    else if (totalScore <= -18) { action = 'SELL'; actionClass = 'sell'; }
+    // Historical Per-Candle Scores for Last 5 & Last 14 Candles (from fetched Binance candles)
+    const n = candles ? candles.length : 0;
+    const candleObiAll = (candles || []).map(c => {
+      const buy = Number(c.buyVol) || 0;
+      const sell = Number(c.sellVol) || 0;
+      const tot = buy + sell;
+      return tot > 0 ? ((buy - sell) / tot) * 100 : 0;
+    });
+
+    const histStart = Math.max(0, n - 14);
+    const scoreHistory = [];
+    for (let i = histStart; i < n; i++) {
+      if (i === n - 1) {
+        scoreHistory.push(totalScore);
+        continue;
+      }
+      // Rolling 5-candle OBI avg ending at candle i
+      const wStart = Math.max(0, i - 4);
+      let sumObi = 0;
+      for (let k = wStart; k <= i; k++) sumObi += candleObiAll[k];
+      const avg5AtI = sumObi / (i - wStart + 1);
+      const instAtI = candleObiAll[i];
+      const blendedAtI = avg5AtI * 0.7 + instAtI * 0.3;
+      const obiS = Math.max(-25, Math.min(25, (blendedAtI / 40) * 25));
+
+      // VWAP & EMA trend at candle i
+      const cClose = candles[i].close;
+      const vAtI = vwapObj.series[i] ?? cClose;
+      const e20 = ema20Arr[i] ?? cClose;
+      const e50 = ema50Arr[i] ?? cClose;
+      const trS = (cClose >= vAtI ? 15 : -15) + (e20 >= e50 ? 10 : -10);
+
+      // Momentum (RSI vs MA + MACD Hist) at candle i
+      let mS = 0;
+      const rI = rsiData.rsi[i];
+      const rMaI = rsiData.rsiMA[i];
+      if (rI !== null && rI !== undefined && rMaI !== null && rMaI !== undefined) {
+        mS += rI >= rMaI ? 10 : -10;
+      }
+      const hI = macdData.hist[i];
+      if (hI !== null && hI !== undefined) {
+        mS += hI >= 0 ? 10 : -10;
+      }
+      mS = Math.max(-25, Math.min(25, mS));
+
+      scoreHistory.push(Math.round(obiS + trS + mS + patScore));
+    }
+
+    const last5Scores = scoreHistory.slice(-5);
+    const avgScore5 = last5Scores.length
+      ? Math.round(last5Scores.reduce((s, v) => s + v, 0) / last5Scores.length)
+      : totalScore;
+    const avgScore14 = scoreHistory.length
+      ? Math.round(scoreHistory.reduce((s, v) => s + v, 0) / scoreHistory.length)
+      : totalScore;
+
+    const avg5Meta = classifyScoreAction(avgScore5, 45, 18);
+    const avg14Meta = classifyScoreAction(avgScore14, 45, 18);
 
     return {
       tf,
       action,
       actionClass,
       score: totalScore,
+      avgScore5,
+      avgScore14,
+      avg5Action: avg5Meta.action,
+      avg5Class: avg5Meta.actionClass,
+      avg14Action: avg14Meta.action,
+      avg14Class: avg14Meta.actionClass,
       confidence,
       obi: { ...obi, instant: effectiveInstant },
       trend,
@@ -440,6 +511,8 @@ window.Indicators = (function () {
     const weights = { '1m': 0.15, '5m': 0.20, '15m': 0.30, '4h': 0.35 };
     const tfs = Object.keys(decisionsMap);
     let weightedScore = 0;
+    let weightedAvg5 = 0;
+    let weightedAvg14 = 0;
     let totalW = 0;
     let vwapBullCount = 0;
     let vwapBearCount = 0;
@@ -449,12 +522,16 @@ window.Indicators = (function () {
       if (!d) return;
       const w = weights[tf] || 0.25;
       weightedScore += d.score * w;
+      weightedAvg5 += (d.avgScore5 ?? d.score) * w;
+      weightedAvg14 += (d.avgScore14 ?? d.score) * w;
       totalW += w;
       if (d.trend.priceAboveVwap) vwapBullCount++;
       else vwapBearCount++;
     });
 
     const masterScore = totalW > 0 ? Math.round(weightedScore / totalW) : 0;
+    const masterAvgScore5 = totalW > 0 ? Math.round(weightedAvg5 / totalW) : 0;
+    const masterAvgScore14 = totalW > 0 ? Math.round(weightedAvg14 / totalW) : 0;
     let action = 'WAIT';
     let actionClass = 'wait';
     if (masterScore >= 42) { action = 'STRONG BUY'; actionClass = 'strong-buy'; }
@@ -483,6 +560,8 @@ window.Indicators = (function () {
       action,
       actionClass,
       score: masterScore,
+      avgScore5: masterAvgScore5,
+      avgScore14: masterAvgScore14,
       confidence: Math.min(99, Math.max(10, Math.abs(masterScore))),
       vwapBullCount,
       vwapBearCount,

@@ -169,6 +169,15 @@
     });
   }
 
+  function fmtSignedScore(val) {
+    const num = Math.round(Number(val) || 0);
+    return `${num >= 0 ? '+' : ''}${num}`;
+  }
+
+  function scoreColorCls(val) {
+    return val >= 18 ? 'txt-green' : val <= -18 ? 'txt-red' : 'txt-amber';
+  }
+
   function renderSmartActionMatrix() {
     const tbody = $('smartMatrixBody');
     if (!tbody) return;
@@ -180,9 +189,16 @@
       vwapEl.className = `vwap-align-pill ${master.vwapAlignmentClass}`;
     }
 
+    const masterAvgEl = $('masterAvgPill');
+    if (masterAvgEl) {
+      const a5 = master.avgScore5 ?? master.score;
+      const a14 = master.avgScore14 ?? master.score;
+      masterAvgEl.innerHTML = `AVG(5): <strong class="${scoreColorCls(a5)}">${fmtSignedScore(a5)}</strong> · AVG(14): <strong class="${scoreColorCls(a14)}">${fmtSignedScore(a14)}</strong>`;
+    }
+
     const masterEl = $('masterDecisionPill');
     if (masterEl) {
-      masterEl.textContent = `MASTER: ${master.action} (${master.score >= 0 ? '+' : ''}${master.score})`;
+      masterEl.textContent = `MASTER: ${master.action} (${fmtSignedScore(master.score)})`;
       masterEl.className = `decision-pill ${master.actionClass}`;
     }
 
@@ -198,7 +214,9 @@
       const rsiTxt = d.rsi.val !== null ? d.rsi.val.toFixed(1) : '--';
       const rsiCls = d.rsi.bull === true ? 'txt-green' : d.rsi.bull === false ? 'txt-red' : 'txt-gray';
       const macdCls = d.macd.bull ? 'txt-green' : 'txt-red';
-      const scoreCls = d.score >= 18 ? 'txt-green' : d.score <= -18 ? 'txt-red' : 'txt-amber';
+      const scoreCls = scoreColorCls(d.score);
+      const avg5Val = d.avgScore5 ?? d.score;
+      const avg14Val = d.avgScore14 ?? d.score;
 
       const tr = document.createElement('tr');
       tr.className = tf === AppState.activeTf ? 'active-row' : '';
@@ -210,7 +228,9 @@
         <td><span class="${vwapCls}">${d.trend.priceAboveVwap ? '▲ ABOVE' : '▼ BELOW'} (${fmtSignedPct(d.trend.vwapDiffPct)})</span> · <span class="${emaCls}">EMA ${d.trend.emaBull ? '▲' : '▼'}</span></td>
         <td><span class="${rsiCls}">RSI ${rsiTxt} ${d.rsi.bull === true ? '▲' : d.rsi.bull === false ? '▼' : ''}</span> · <span class="${macdCls}">MACD ${d.macd.bull ? '▲' : '▼'}</span></td>
         <td><span class="txt-green">${d.patterns.bullCount}B (${d.patterns.bullAvgStr}%)</span> / <span class="txt-red">${d.patterns.bearCount}S (${d.patterns.bearAvgStr}%)</span></td>
-        <td><strong class="${scoreCls}">${d.score >= 0 ? '+' : ''}${d.score}</strong></td>
+        <td><strong class="${scoreCls}">${fmtSignedScore(d.score)}</strong></td>
+        <td><span class="avg-score-chip ${d.avg5Class || 'wait'}">${fmtSignedScore(avg5Val)}</span></td>
+        <td><span class="avg-score-chip ${d.avg14Class || 'wait'}">${fmtSignedScore(avg14Val)}</span></td>
       `;
       tr.addEventListener('click', () => switchTimeframe(tf));
       tbody.appendChild(tr);
